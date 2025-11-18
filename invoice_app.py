@@ -1,22 +1,42 @@
 import os
 import csv
+import sys
+import re
 from datetime import datetime
 from tkinter import *
 from tkinter import ttk, messagebox
 
-from reportlab.lib.pagesizes import A4
-from reportlab.lib import colors
-from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer,
-    Table, TableStyle, Image, KeepTogether
-)
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+try:
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer,
+        Table, TableStyle, Image, KeepTogether
+    )
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+except ImportError:
+    try:
+        from tkinter import messagebox
+        messagebox.showerror("Missing dependency", "ReportLab is not installed.\n\npip install reportlab")
+    except Exception:
+        pass
+    import sys
+    sys.exit(1)
 
 
 # ============================================================
 #                CSV STORAGE FOR INVOICE NUMBERS
 # ============================================================
-INVOICE_LOG = "invoice_log.csv"
+def app_dir():
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+def resource_path(name):
+    base = getattr(sys, "_MEIPASS", app_dir())
+    return os.path.join(base, name)
+
+INVOICE_LOG = os.path.join(app_dir(), "invoice_log.csv")
 
 def init_csv():
     """Create CSV if missing."""
@@ -68,6 +88,32 @@ def safe_float(v):
     except:
         return 0.0
 
+def safe_filename(s):
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", s.strip())[:60]
+
+# ============================================================
+#                CSV STORAGE FOR INVOICE DETAILS
+# ============================================================
+INVOICES_CSV = os.path.join(app_dir(), "invoices.csv")
+
+def write_invoice_csv(invoice_type, data):
+    exists = os.path.exists(INVOICES_CSV)
+    with open(INVOICES_CSV, "a", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        if not exists:
+            w.writerow([
+                "invoice_type","invoice_no","date","customer","nic","cust_addr",
+                "delivery","model","engine","chassis","color","price","down",
+                "balance","finance_company","finance_address","dealer"
+            ])
+        w.writerow([
+            invoice_type,data["invoice_no"],data["date"],data["customer"],data["nic"],
+            data["cust_addr"],data["delivery"],data["model"],data["engine"],
+            data["chassis"],data["color"],data["price"],data["down"],
+            data["balance"],data["finance_company"],data["finance_address"],
+            data["dealer"]
+        ])
+
 
 # ============================================================
 #                PDF GENERATION (SALES / PROFORMA)
@@ -83,7 +129,7 @@ def generate_sales_pdf(data, out_path):
 
     # LOGO
     try:
-        logo = Image("download.png", width=90, height=40)
+        logo = Image(resource_path("download.png"), width=90, height=40)
         logo.hAlign = "LEFT"
         elements.append(logo)
         elements.append(Spacer(1, 6))
@@ -111,18 +157,20 @@ def generate_sales_pdf(data, out_path):
         styles["Normal"]
     )
 
-    elements += [title, Spacer(1, 6), subtitle, Spacer(1, 6), bill_line, Spacer(1, 20)]
+    elements += [title, Spacer(1, 6), subtitle, Spacer(1, 20)]
 
     # Finance info
-    fin = Paragraph(
-        f"<b>To:</b> {data['finance_company']}<br/><font size=\"9\">{data['finance_address']}</font>",
-        styles["Normal"]
-    )
-    elements += [fin, Spacer(1, 12)]
+    if data.get("show_finance"):
+        fin = Paragraph(
+            f"<b>To:</b> {data['finance_company']}<br/><font size=\"9\">{data['finance_address']}</font>",
+            styles["Normal"]
+        )
+        elements += [fin, Spacer(1, 12)]
 
     # Header Table
     header = [
-        ["Invoice No:", data["invoice_no"], "Date:", data["date"]],
+        ["", "", "Date:", data["date"]],
+        ["", "", "Invoice No:", data["invoice_no"]],
         ["Customer Name:", data["customer"], "", ""],
         ["Address:", data["cust_addr"], "", ""],
         ["NIC:", data["nic"], "", ""],
@@ -131,14 +179,17 @@ def generate_sales_pdf(data, out_path):
     t.setStyle(TableStyle([
         ("FONTNAME", (0,0), (-1,-1), "Helvetica-Bold")
     ]))
-    elements += [t, Spacer(1, 12)]
+    elements += [t, Spacer(1, 20)]
 
     # Vehicle details
     v = [
         ["Model", data["model"]],
         ["Engine No", data["engine"]],
         ["Chassis No", data["chassis"]],
-        ["Color", data["color"]]
+        ["Color", data["color"]],
+        ["Engine Capacity", "435.6 cc"],
+        ["Manufactured Year", "2025"],
+        ["Country of Origin", "India"],
     ]
     vt = Table(v, colWidths=[150, 250])
     vt.setStyle(TableStyle([
@@ -147,17 +198,21 @@ def generate_sales_pdf(data, out_path):
     ]))
     elements += [
         Paragraph("<b>Vehicle Details</b>", styles["Heading4"]),
-        Spacer(1, 4),
+        Spacer(1, 8),
         vt,
-        Spacer(1, 10)
+        Spacer(1, 18)
     ]
 
     # Payment summary
+    label_price = "Vehicle Price" if not data.get("is_leasing") else "Total Price"
+    label_down = "Total Payment" if not data.get("is_leasing") else "Down Payment"
     pay = [
-        ["Total Price", f"Rs. {data['price']:,.2f}"],
-        ["Down Payment", f"Rs. {data['down']:,.2f}"],
-        ["Balance", f"Rs. {data['balance']:,.2f}"],
+        [label_price, f"Rs. {data['price']:,.2f}"],
+        [label_down, f"Rs. {data['down']:,.2f}"],
     ]
+    if (data.get("balance", 0.0) or 0.0) > 0.0:
+        bal_label = "Leasing Amount" if data.get("is_leasing") else "Balance"
+        pay.append([bal_label, f"Rs. {data['balance']:,.2f}"])
     pt = Table(pay, colWidths=[200, 200])
     pt.setStyle(TableStyle([
         ("BACKGROUND", (0,0), (0,-1), colors.whitesmoke),
@@ -166,9 +221,9 @@ def generate_sales_pdf(data, out_path):
     ]))
     elements += [
         Paragraph("<b>Payment Summary</b>", styles["Heading4"]),
-        Spacer(1, 4),
+        Spacer(1, 8),
         pt,
-        Spacer(1, 10)
+        Spacer(1, 18)
     ]
 
     if data["delivery"]:
@@ -178,7 +233,7 @@ def generate_sales_pdf(data, out_path):
         elements.append(Spacer(1, 20))
 
     # Signature lines
-    elements.append(Spacer(1, 40))
+    elements.append(Spacer(1, 80))
     sign = Table(
         [
             ["........................................", "........................................"],
@@ -189,9 +244,12 @@ def generate_sales_pdf(data, out_path):
     )
     sign.setStyle(TableStyle([
         ("ALIGN", (0,0), (-1,0), "CENTER"),
+        ("ALIGN", (0,1), (-1,1), "CENTER"),
         ("FONTNAME", (0,1), (-1,1), "Helvetica-Bold")
     ]))
     elements += [KeepTogether(sign)]
+    elements.append(Spacer(1, 30))
+    elements.append(Paragraph("<para align='center'><b>Thank you for your business!</b></para>", styles["Normal"]))
 
     doc.build(elements)
 
@@ -208,7 +266,7 @@ def generate_proforma_pdf(data, out_path):
 
     # Logo
     try:
-        logo = Image("download.png", width=90, height=40)
+        logo = Image(resource_path("download.png"), width=90, height=40)
         logo.hAlign = "LEFT"
         elements.append(logo)
         elements.append(Spacer(1, 6))
@@ -225,13 +283,23 @@ def generate_proforma_pdf(data, out_path):
         styles["Normal"]
     )
 
-    elements += [title, Spacer(1, 6), subtitle, Spacer(1, 6), bill_line, Spacer(1, 20)]
+    elements += [title, Spacer(1, 6), subtitle, Spacer(1, 20)]
 
     fin = Paragraph(
         f"<b>To:</b> {data['finance_company']}<br/><font size=\"9\">{data['finance_address']}</font>",
         styles["Normal"]
     )
     elements += [fin, Spacer(1, 12)]
+
+    header_top = [
+        ["", "", "Date:", data["date"]],
+        ["", "", "Invoice No:", data["invoice_no"]],
+    ]
+    ht = Table(header_top, colWidths=[95, 250, 70, 90])
+    ht.setStyle(TableStyle([
+        ("FONTNAME", (0,0), (-1,-1), "Helvetica-Bold")
+    ]))
+    elements += [ht, Spacer(1, 15)]
 
     # Customer header
     header = [
@@ -242,7 +310,7 @@ def generate_proforma_pdf(data, out_path):
     t.setStyle(TableStyle([
         ("FONTNAME", (0,0), (-1,-1), "Helvetica-Bold")
     ]))
-    elements += [t, Spacer(1, 12)]
+    elements += [t, Spacer(1, 18)]
 
     # Delivery address
     elements.append(
@@ -255,7 +323,10 @@ def generate_proforma_pdf(data, out_path):
         ["Model", data["model"]],
         ["Engine No", data["engine"]],
         ["Chassis No", data["chassis"]],
-        ["Color", data["color"]]
+        ["Color", data["color"]],
+        ["Engine Capacity", "435.6 cc"],
+        ["Manufactured Year", "2025"],
+        ["Country of Origin", "India"],
     ]
     vt = Table(v, colWidths=[150, 250])
     vt.setStyle(TableStyle([
@@ -264,10 +335,15 @@ def generate_proforma_pdf(data, out_path):
     ]))
 
     elements += [Paragraph("<b>Vehicle Details</b>", styles["Heading4"]),
-                 Spacer(1, 4), vt, Spacer(1, 15)]
+                 Spacer(1, 8), vt, Spacer(1, 20)]
+
+    # Proforma footer
+    elements.append(Spacer(1, 10))
+    elements.append(Paragraph(f"<b>This Proforma Invoice is issued for leasing arrangement purposes with {data['finance_company']}. Vehicle will be delivered upon completion of the leasing process and receipt of relevant approvals.</b>", styles["Normal"]))
+    elements.append(Spacer(1, 30))
 
     # Signature
-    elements.append(Spacer(1, 40))
+    elements.append(Spacer(1, 80))
     sign = Table(
         [
             ["........................................", "........................................"],
@@ -278,9 +354,12 @@ def generate_proforma_pdf(data, out_path):
     )
     sign.setStyle(TableStyle([
         ("ALIGN", (0,0), (-1,0), "CENTER"),
+        ("ALIGN", (0,1), (-1,1), "CENTER"),
         ("FONTNAME", (0,1), (-1,1), "Helvetica-Bold")
     ]))
     elements.append(KeepTogether(sign))
+    elements.append(Spacer(1, 30))
+    elements.append(Paragraph("<para align='center'><b>Thank you for your business!</b></para>", styles["Normal"]))
 
     doc.build(elements)
 
@@ -333,7 +412,19 @@ class InvoiceApp:
         for label in labels:
             Label(master, text=label).grid(row=row, column=0, sticky=W)
 
-            entry = Text(master, height=1, width=40) if label.endswith("Address:") or "Delivery" in label else Entry(master, width=42)
+            if label == "Vehicle Model:":
+                entry = ttk.Combobox(
+                    master,
+                    values=[
+                        "APE AUTO DX PASSENGER (Diesel)",
+                        "APE AUTO DX PICKUP (Diesel)"
+                    ],
+                    state="readonly",
+                    width=40
+                )
+                entry.set("APE AUTO DX PASSENGER (Diesel)")
+            else:
+                entry = Text(master, height=1, width=40) if label.endswith("Address:") or "Delivery" in label else Entry(master, width=42)
 
             if label in default_values:
                 if isinstance(entry, Entry):
@@ -346,6 +437,7 @@ class InvoiceApp:
             row += 1
 
         Button(master, text="Generate Invoice", width=25, command=self.generate_invoice).grid(row=row, column=1, pady=20)
+        Button(master, text="Export All Invoices CSV", width=25, command=self.export_invoices_csv).grid(row=row, column=0, pady=20)
 
     def generate_invoice(self):
         try:
@@ -388,21 +480,35 @@ class InvoiceApp:
                 "color": get("Color:"),
                 "price": price,
                 "down": down,
-                "balance": balance
+                "balance": balance,
+                "show_finance": invoice_type == "PROFORMA",
+                "is_leasing": raw_type == "SALES-LEASING"
             }
 
-            folder = f"output/{invoice_type}-{datetime.now().year}"
-            out_path = f"{folder}/{inv_no}_{data['customer'].replace(' ', '_')}.pdf"
+            folder = os.path.join(app_dir(), "output", f"{invoice_type}-{datetime.now().year}")
+            out_path = os.path.join(folder, f"{inv_no}_{safe_filename(data['customer'])}.pdf")
 
             if invoice_type == "PROFORMA":
                 generate_proforma_pdf(data, out_path)
             else:
                 generate_sales_pdf(data, out_path)
+            write_invoice_csv(invoice_type, data)
 
             messagebox.showinfo("Success", f"Invoice generated:\n{out_path}")
 
         except Exception as e:
             messagebox.showerror("Error", f"Failed: {e}")
+
+    def export_invoices_csv(self):
+        if not os.path.exists(INVOICES_CSV):
+            messagebox.showinfo("No data", "No invoices to export yet.")
+            return
+        export_dir = os.path.join(app_dir(), "output", "exports")
+        os.makedirs(export_dir, exist_ok=True)
+        dest = os.path.join(export_dir, f"invoices_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
+        with open(INVOICES_CSV, "r", encoding="utf-8") as fi, open(dest, "w", encoding="utf-8", newline="") as fo:
+            fo.write(fi.read())
+        messagebox.showinfo("Exported", f"CSV exported:\n{dest}")
 
 
 if __name__ == "__main__":
