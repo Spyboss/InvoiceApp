@@ -2,6 +2,7 @@ import os
 import csv
 import sys
 import re
+import requests
 from datetime import datetime
 from tkinter import *
 from tkinter import ttk, messagebox
@@ -95,6 +96,7 @@ def safe_filename(s):
 #                CSV STORAGE FOR INVOICE DETAILS
 # ============================================================
 INVOICES_CSV = os.path.join(app_dir(), "invoices.csv")
+API_BASE_URL = os.environ.get("INVOICE_API_URL", "")
 
 def write_invoice_csv(invoice_type, data):
     exists = os.path.exists(INVOICES_CSV)
@@ -513,10 +515,23 @@ class InvoiceApp:
             folder = os.path.join(app_dir(), "output", f"{invoice_type}-{datetime.now().year}")
             out_path = os.path.join(folder, f"{inv_no}_{safe_filename(data['customer'])}.pdf")
 
-            if invoice_type == "PROFORMA":
-                generate_proforma_pdf(data, out_path)
+            if API_BASE_URL:
+                try:
+                    r = requests.post(f"{API_BASE_URL}/invoices/{raw_type}", json=data, timeout=25)
+                    r.raise_for_status()
+                    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                    with open(out_path, "wb") as f:
+                        f.write(r.content)
+                except Exception:
+                    if invoice_type == "PROFORMA":
+                        generate_proforma_pdf(data, out_path)
+                    else:
+                        generate_sales_pdf(data, out_path)
             else:
-                generate_sales_pdf(data, out_path)
+                if invoice_type == "PROFORMA":
+                    generate_proforma_pdf(data, out_path)
+                else:
+                    generate_sales_pdf(data, out_path)
             write_invoice_csv(invoice_type, data)
 
             messagebox.showinfo("Success", f"Invoice generated:\n{out_path}")

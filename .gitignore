@@ -16,6 +16,7 @@ build/
 output/
 invoice_log.csv
 invoices.csv
+*.pdf
 Thumbs.db
 .DS_Store
 .clinerules/byterover-rules.md
