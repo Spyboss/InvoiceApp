@@ -11,7 +11,7 @@ try:
     from reportlab.lib import colors
     from reportlab.platypus import (
         SimpleDocTemplate, Paragraph, Spacer,
-        Table, TableStyle, Image, KeepTogether
+        Table, TableStyle, Image, KeepTogether, Frame, PageTemplate
     )
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 except ImportError:
@@ -249,119 +249,144 @@ def generate_sales_pdf(data, out_path):
     ]))
     elements += [KeepTogether(sign)]
     elements.append(Spacer(1, 30))
-    elements.append(Paragraph("<para align='center'><b>Thank you for your business!</b></para>", styles["Normal"]))
+    elements.append(Paragraph("<para align='center'><b>Thank you for your business! Come again!</b></para>", styles["Normal"]))
 
-    doc.build(elements)
+    def sales_footer(canvas, doc):
+        canvas.saveState()
+        x = doc.leftMargin + doc.width / 2.0
+        canvas.setFont("Helvetica", 9)
+        canvas.setFillColor(colors.gray)
+        canvas.drawCentredString(x, 25, "Contact: 0778525428 / 0768525428 | Email: gunawardhanaenttangalle@gmail.com")
+        canvas.restoreState()
+
+    doc.build(elements, onFirstPage=sales_footer, onLaterPages=sales_footer)
 
 
 
 def generate_proforma_pdf(data, out_path):
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
-    doc = SimpleDocTemplate(out_path, pagesize=A4,
-                            topMargin=45, bottomMargin=35,
-                            leftMargin=40, rightMargin=40)
     styles = getSampleStyleSheet()
-    elements = []
+    small = ParagraphStyle("small", parent=styles["Normal"], fontSize=9, leading=11)
+    title_style = ParagraphStyle("title", alignment=1, fontSize=16, fontName="Helvetica-Bold")
 
-    # Logo
-    try:
-        logo = Image(resource_path("download.png"), width=90, height=40)
-        logo.hAlign = "LEFT"
-        elements.append(logo)
-        elements.append(Spacer(1, 6))
-    except:
-        pass
+    def header_footer(canvas, doc):
+        canvas.saveState()
+        try:
+            canvas.drawImage(resource_path("download.png"), 25, 790, width=50, height=50, preserveAspectRatio=True)
+        except Exception:
+            pass
+        dealer_name = str(data.get("dealer", "")).split(",")[0].strip() or "Dealer"
+        dealer_addr = ",".join(str(data.get("dealer", "")).split(",")[1:]).strip()
+        canvas.setFont("Helvetica-Bold", 12); canvas.setFillColor(colors.HexColor("#0B3D91"))
+        canvas.drawString(80, 820, dealer_name)
+        canvas.setFont("Helvetica", 9); canvas.setFillColor(colors.grey)
+        canvas.drawString(80, 805, "Authorized Dealer")
+        if dealer_addr:
+            canvas.setFont("Helvetica", 9); canvas.setFillColor(colors.black)
+            canvas.drawString(80, 792, dealer_addr)
+        try:
+            canvas.drawImage(resource_path("singer_logo.png"), 440, 805, width=120, height=35, preserveAspectRatio=True)
+        except Exception:
+            pass
+        canvas.setFont("Helvetica-Bold", 9)
+        canvas.drawCentredString(300, 45, dealer_name)
+        if dealer_addr:
+            canvas.setFont("Helvetica", 9)
+            canvas.drawCentredString(300, 32, dealer_addr)
+        canvas.setFont("Helvetica", 9)
+        canvas.drawCentredString(300, 20, "Contact: 0778525428 / 0768525428 | Email: gunawardhanaenttangalle@gmail.com")
+        canvas.restoreState()
 
-    title = Paragraph("<b><font size=\"15\">PROFORMA INVOICE</font></b>", styles["Title"])
-    subtitle = Paragraph(
-        f"<para align='center'><font size=\"10\">{data['dealer']}</font></para>",
-        styles["Normal"]
+    doc = SimpleDocTemplate(out_path, pagesize=A4, rightMargin=25, leftMargin=25, topMargin=40, bottomMargin=30)
+    frame = Frame(25, 90, 545, 680, id="content")
+    doc.addPageTemplates([PageTemplate(id="main", frames=frame, onPage=header_footer)])
+
+    story = []
+    story.append(Spacer(1, 40))
+    story.append(Paragraph("PROFORMA INVOICE", title_style))
+    story.append(Spacer(1, 15))
+
+    top_col_widths = [190, 120, 80, 155]
+    recipient_block = (
+        f"TO : THE MANAGER\n{data['finance_company']}\n{data['finance_address']}\n\n"+
+        f"Customer: {data['customer']}\nAddress: {data['cust_addr']}\nNIC: {data['nic']}"
     )
-    bill_line = Paragraph(
-        f"<para align='center'><b>Bill No: {data['invoice_no']}</b></para>",
-        styles["Normal"]
-    )
-
-    elements += [title, Spacer(1, 6), subtitle, Spacer(1, 20)]
-
-    fin = Paragraph(
-        f"<b>To:</b> {data['finance_company']}<br/><font size=\"9\">{data['finance_address']}</font>",
-        styles["Normal"]
-    )
-    elements += [fin, Spacer(1, 12)]
-
-    header_top = [
-        ["", "", "Date:", data["date"]],
-        ["", "", "Invoice No:", data["invoice_no"]],
-    ]
-    ht = Table(header_top, colWidths=[95, 250, 70, 90])
-    ht.setStyle(TableStyle([
-        ("FONTNAME", (0,0), (-1,-1), "Helvetica-Bold")
-    ]))
-    elements += [ht, Spacer(1, 15)]
-
-    # Customer header
-    header = [
-        ["Customer:", data["customer"], "NIC:", data["nic"]],
-        ["Address:", data["cust_addr"], "", ""]
-    ]
-    t = Table(header, colWidths=[95, 250, 70, 90])
-    t.setStyle(TableStyle([
-        ("FONTNAME", (0,0), (-1,-1), "Helvetica-Bold")
-    ]))
-    elements += [t, Spacer(1, 18)]
-
-    # Delivery address
-    elements.append(
-        Paragraph(f"<b>Delivery Address:</b><br/>{data['delivery']}", styles["Normal"])
-    )
-    elements.append(Spacer(1, 20))
-
-    # Vehicle details
-    v = [
-        ["Model", data["model"]],
-        ["Engine No", data["engine"]],
-        ["Chassis No", data["chassis"]],
-        ["Color", data["color"]],
-        ["Engine Capacity", "435.6 cc"],
-        ["Manufactured Year", "2025"],
-        ["Country of Origin", "India"],
-    ]
-    vt = Table(v, colWidths=[150, 250])
-    vt.setStyle(TableStyle([
-        ("BACKGROUND", (0,0), (0,-1), colors.whitesmoke),
-        ("GRID", (0,0), (-1,-1), 0.25, colors.gray),
-    ]))
-
-    elements += [Paragraph("<b>Vehicle Details</b>", styles["Heading4"]),
-                 Spacer(1, 8), vt, Spacer(1, 20)]
-
-    # Proforma footer
-    elements.append(Spacer(1, 10))
-    elements.append(Paragraph(f"<b>This Proforma Invoice is issued for leasing arrangement purposes with {data['finance_company']}. Vehicle will be delivered upon completion of the leasing process and receipt of relevant approvals.</b>", styles["Normal"]))
-    elements.append(Spacer(1, 30))
-
-    # Signature
-    elements.append(Spacer(1, 80))
-    sign = Table(
+    top_data = [
+        ["Proforma Invoice No.", data["invoice_no"], "DATE:", data["date"]],
         [
-            ["........................................", "........................................"],
-            ["Customer Signature", "Authorized Signature & Stamp"]
-        ],
-        colWidths=[240, 240],
-        hAlign="CENTER"
-    )
-    sign.setStyle(TableStyle([
-        ("ALIGN", (0,0), (-1,0), "CENTER"),
-        ("ALIGN", (0,1), (-1,1), "CENTER"),
-        ("FONTNAME", (0,1), (-1,1), "Helvetica-Bold")
+            "MANUFACTURER: INDIA\nPIAGGIO VEHICLES PVT LTD\nPUNE, MAHARASHTRA",
+            "",
+            recipient_block,
+            ""
+        ]
+    ]
+    top_table = Table(top_data, colWidths=top_col_widths)
+    top_table.setStyle(TableStyle([
+        ("SPAN", (0,1), (1,1)),
+        ("SPAN", (2,1), (3,1)),
+        ("BOX", (0,0), (-1,-1), 1, colors.black),
+        ("INNERGRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("VALIGN", (0,0), (-1,-1), "TOP"),
+        ("FONTSIZE", (0,0), (-1,-1), 9),
     ]))
-    elements.append(KeepTogether(sign))
-    elements.append(Spacer(1, 30))
-    elements.append(Paragraph("<para align='center'><b>Thank you for your business!</b></para>", styles["Normal"]))
+    story.append(top_table)
+    story.append(Spacer(1, 8))
 
-    doc.build(elements)
+    desc_table = Table([
+        ["DESCRIPTION", "", "SELLING PRICE", f"{data['price']:,.2f}"],
+        ["MAKE", "PIAGGIO", "LEASE AMOUNT", f"{data['down']:,.2f}"],
+        ["MODEL", data["model"], "", ""],
+        ["COLOUR", data["color"], "", ""],
+        ["ENGINE NO", data["engine"], "", ""],
+        ["CHASSIS NO", data["chassis"], "", ""]
+    ], colWidths=[150, 200, 100, 95])
+    desc_table.setStyle(TableStyle([
+        ("BOX", (0,0), (-1,-1), 1, colors.black),
+        ("INNERGRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("FONTSIZE", (0,0), (-1,-1), 9),
+        ("VALIGN", (0,0), (-1,-1), "TOP")
+    ]))
+    story.append(desc_table)
+    story.append(Spacer(1, 8))
+
+    info_table = Table([[
+        Paragraph("""
+BRAND NEW DIESEL THREE WHEELER<br/>
+12V Self-start, four stroke, air cooled diesel engine<br/>
+435CC 8h.p.<br/>
+Warranty : 18 months or 25,000kms whichever comes first<br/>
+Services : 3 labor-free services will be provided
+""", small),
+        Paragraph("""
+REMARKS:<br/>
+Please note that the above price offered is based on the prevailing
+rates of exchange, import duties, other Government levies and
+any variations to the above will be adjusted in the final invoice.
+""", small)
+    ]], colWidths=[270, 275])
+    info_table.setStyle(TableStyle([
+        ("BOX", (0,0), (-1,-1), 1, colors.black),
+        ("INNERGRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("VALIGN", (0,0), (-1,-1), "TOP"),
+    ]))
+    story.append(info_table)
+    story.append(Spacer(1, 10))
+
+    story.append(Paragraph("""
+<b>VALIDITY – 07 DAYS</b><br/>
+PAYMENT TERMS: All payments should be made in favor of the finance company per instructions.<br/><br/>
+
+<b>DELIVERY – Within 14 to 30 DAYS</b><br/>
+1. Prices & Specifications subject to change without prior notice.<br/>
+2. Goods being quoted are subject to availability at time of confirmed order.<br/>
+3. Model of the vehicle must be mentioned clearly on your purchase order.<br/>
+4. Seller is not responsible for delays due to government regulations or force majeure.
+""", small))
+    story.append(Spacer(1, 90))
+    story.append(Paragraph(".......................................................<br/>Authorized Signatory", small))
+
+    doc.build(story)
 
 
 # ============================================================
