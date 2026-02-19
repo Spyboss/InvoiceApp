@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+reportlab
+requests
+supabase
+python-multipart
+pydantic

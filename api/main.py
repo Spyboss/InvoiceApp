@@ -1,25 +1,65 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from datetime import datetime
-import io, os, csv
+import io, os, csv, sys
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from .db import db
 
 app = FastAPI()
 styles = getSampleStyleSheet()
 small = ParagraphStyle("small", parent=styles["Normal"], fontSize=9, leading=11)
 
-INVOICE_LOG = "invoice_log.csv"
+def app_dir():
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+INVOICE_LOG = os.path.join(app_dir(), "invoice_log.csv")
+INVOICES_CSV = os.path.join(app_dir(), "invoices.csv")
 
 def init_csv():
     if not os.path.exists(INVOICE_LOG):
         with open(INVOICE_LOG, "w", newline="", encoding="utf-8") as f:
             csv.writer(f).writerow(["invoice_type", "year", "last_no"])
 
+def write_invoice_csv(invoice_type, data):
+    # Try saving to DB first
+    if db.client:
+        # Enrich data for DB if necessary
+        db_data = data.copy()
+        db_data["invoice_type"] = invoice_type
+        db_data["year"] = datetime.now().year
+        db.save_invoice(db_data)
+
+    exists = os.path.exists(INVOICES_CSV)
+    with open(INVOICES_CSV, "a", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        if not exists:
+            w.writerow([
+                "invoice_type","invoice_no","date","customer","nic","cust_addr",
+                "delivery","model","engine","chassis","color","price","down",
+                "balance","finance_company","finance_address","dealer"
+            ])
+        w.writerow([
+            invoice_type,data["invoice_no"],data["date"],data["customer"],data["nic"],
+            data["cust_addr"],data["delivery"],data["model"],data["engine"],
+            data["chassis"],data["color"],data["price"],data["down"],
+            data["balance"],data.get("finance_company",""),data.get("finance_address",""),data.get("dealer","")
+        ])
+
 def next_invoice_number(inv_type):
     year = datetime.now().year
+    
+    if db.client:
+        count = db.get_next_invoice_number(inv_type, year)
+        # If DB returns 1 but we might have legacy CSV data?
+        # For now, trust DB if connected
+        if count > 1:
+             return f"{count:04d}"
+
     init_csv()
     rows = []
     with open(INVOICE_LOG, "r", encoding="utf-8") as f:
@@ -106,6 +146,7 @@ def create_invoice(invoice_type: str, payload: dict):
             "date": datetime.now().strftime("%Y-%m-%d"),
             "customer": payload.get("customer", ""),
             "cust_addr": payload.get("cust_addr", ""),
+            "delivery": payload.get("delivery", ""),
             "nic": payload.get("nic", ""),
             "price": price,
             "down": down,
@@ -115,11 +156,17 @@ def create_invoice(invoice_type: str, payload: dict):
             "engine": payload.get("engine", ""),
             "chassis": payload.get("chassis", ""),
             "color": payload.get("color", ""),
+            "finance_company": payload.get("finance_company", ""),
+            "finance_address": payload.get("finance_address", ""),
+            "dealer": payload.get("dealer", ""),
         }
         if it == "PROFORMA":
             pdf = build_proforma_pdf(data)
         else:
             pdf = build_sales_pdf(data)
+        
+        write_invoice_csv(it, data)
+        
         filename = f"{inv_no}_{data['customer'].replace(' ', '_')}.pdf"
         return StreamingResponse(pdf, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename={filename}"})
     except Exception as e:
