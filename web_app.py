@@ -647,7 +647,7 @@ def main():
             with col_v1:
                 vehicle_model = st.selectbox(
                     "Vehicle Model",
-                    ["APE AUTO DX PASSENGER (Diesel)", "APE AUTO DX PICKUP (Diesel)"]
+                    ["APE AUTO DX PASSENGER (Diesel)", "APE Xtra LDX"]
                 )
                 engine_no = st.text_input("Engine No")
                 chassis_no = st.text_input("Chassis No")

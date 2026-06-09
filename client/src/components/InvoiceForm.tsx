@@ -127,7 +127,7 @@ export function InvoiceForm() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="APE AUTO DX PASSENGER (Diesel)">APE AUTO DX PASSENGER (Diesel)</SelectItem>
-                      <SelectItem value="APE AUTO DX PICKUP (Diesel)">APE AUTO DX PICKUP (Diesel)</SelectItem>
+                      <SelectItem value="APE Xtra LDX">APE Xtra LDX</SelectItem>
                     </SelectContent>
                   </Select>
                 )}
