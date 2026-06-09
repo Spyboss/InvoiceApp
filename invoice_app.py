@@ -444,7 +444,7 @@ class InvoiceApp:
                     master,
                     values=[
                         "APE AUTO DX PASSENGER (Diesel)",
-                        "APE AUTO DX PICKUP (Diesel)"
+                        "APE Xtra LDX"
                     ],
                     state="readonly",
                     width=40
