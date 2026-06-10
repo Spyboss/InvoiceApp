@@ -13,6 +13,7 @@ import { Loader2 } from "lucide-react"
 
 const invoiceSchema = z.object({
   invoice_type: z.enum(["SALES-CASH", "SALES-LEASING", "PROFORMA"]),
+  date: z.string().optional(),
   dealer: z.string().min(1, "Dealer name is required"),
   dealer_contact: z.string().optional(),
   finance_company: z.string().optional(),
@@ -132,6 +133,13 @@ export function InvoiceForm() {
                   </Select>
                 )}
               />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="date">Invoice Date</Label>
+              <Input type="date" {...register("date")} defaultValue={new Date().toISOString().split('T')[0]} />
             </div>
           </div>
 

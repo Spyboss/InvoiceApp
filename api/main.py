@@ -143,7 +143,7 @@ def create_invoice(invoice_type: str, payload: dict):
         balance = 0.0 if it == "SALES-CASH" else max(price - down, 0.0)
         data = {
             "invoice_no": inv_no,
-            "date": datetime.now().strftime("%Y-%m-%d"),
+            "date": payload.get("date", datetime.now().strftime("%Y-%m-%d")),
             "customer": payload.get("customer", ""),
             "cust_addr": payload.get("cust_addr", ""),
             "delivery": payload.get("delivery", ""),

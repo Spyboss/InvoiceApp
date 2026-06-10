@@ -409,6 +409,11 @@ class InvoiceApp:
         )
         self.type_box.grid(row=0, column=1, sticky=W)
 
+        Label(master, text="Invoice Date:").grid(row=1, column=0, sticky=W, pady=5)
+        self.date_entry = Entry(master, width=42)
+        self.date_entry.insert(0, datetime.now().strftime("%Y-%m-%d"))
+        self.date_entry.grid(row=1, column=1, sticky=W, pady=3)
+
         labels = [
             "Dealer Name:",               
             "Dealer Contact:",            
@@ -435,7 +440,7 @@ class InvoiceApp:
             "Finance Address:": "No. 54, Beliatta Road, Tangalle",
         }
 
-        row = 1
+        row = 2
         for label in labels:
             Label(master, text=label).grid(row=row, column=0, sticky=W)
 
@@ -493,7 +498,7 @@ class InvoiceApp:
 
             data = {
                 "invoice_no": inv_no,
-                "date": datetime.now().strftime("%Y-%m-%d"),
+                "date": self.date_entry.get().strip() or datetime.now().strftime("%Y-%m-%d"),
                 "dealer": get("Dealer Name:"),
                 "customer": get("Customer Name:"),
                 "cust_addr": get("Customer Address:"),

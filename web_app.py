@@ -624,6 +624,8 @@ def main():
             ["SALES-CASH", "SALES-LEASING", "PROFORMA", "ADVANCE"]
         )
 
+        invoice_date = st.date_input("Invoice Date", datetime.now())
+
         with st.expander("Dealer Information", expanded=True):
             dealer_name = st.text_input("Dealer Name", "Gunawardhana Enterprises, Beliatta Road, Tangalle")
             dealer_contact = st.text_input("Dealer Contact", "077 8318061 / 077 8525428")
@@ -698,7 +700,7 @@ def main():
 
                     data = {
                         "invoice_no": inv_no,
-                        "date": datetime.now().strftime("%Y-%m-%d"),
+                        "date": invoice_date.strftime("%Y-%m-%d"),
                         "dealer": dealer_name,
                         "customer": customer_name,
                         "cust_addr": customer_address,
@@ -751,6 +753,7 @@ def main():
                     label="Download Invoices CSV",
                     data=csv_data,
                     file_name=f"invoices_{datetime.now().strftime('%Y%m%d')}.csv",
+                    use_container_width=True
                     mime="text/csv"
                 )
             else:
