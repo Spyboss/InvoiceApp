@@ -753,8 +753,8 @@ def main():
                     label="Download Invoices CSV",
                     data=csv_data,
                     file_name=f"invoices_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
                     use_container_width=True
-                    mime="text/csv"
                 )
             else:
                 st.warning("No invoices saved yet")
