@@ -125,7 +125,11 @@ def generate_sales_pdf(data, out_path):
 
     doc = SimpleDocTemplate(out_path, pagesize=A4,
                             topMargin=45, bottomMargin=35,
-                            leftMargin=40, rightMargin=40)
+                            leftMargin=40, rightMargin=40,
+                            title="Sales Invoice - Gunawardhana Enterprise, Tangalle",
+                            author="Software solution by UHADEV - uhadev.com",
+                            subject="Piaggio vehicle sales invoice",
+                            keywords="invoice, sales, piaggio, vehicle, tangalle, uhadev")
     styles = getSampleStyleSheet()
     elements = []
 
@@ -300,7 +304,11 @@ def generate_proforma_pdf(data, out_path):
         canvas.drawCentredString(300, 20, "Contact: 0778525428 / 0768525428 | Email: gunawardhanaenttangalle@gmail.com")
         canvas.restoreState()
 
-    doc = SimpleDocTemplate(out_path, pagesize=A4, rightMargin=25, leftMargin=25, topMargin=40, bottomMargin=30)
+    doc = SimpleDocTemplate(out_path, pagesize=A4, rightMargin=25, leftMargin=25, topMargin=40, bottomMargin=30,
+                            title="Proforma Invoice - Gunawardhana Enterprise, Tangalle",
+                            author="Software solution by UHADEV - uhadev.com",
+                            subject="Piaggio vehicle proforma invoice",
+                            keywords="proforma, invoice, piaggio, vehicle, tangalle, uhadev")
     frame = Frame(25, 90, 545, 680, id="content")
     doc.addPageTemplates([PageTemplate(id="main", frames=frame, onPage=header_footer)])
 
