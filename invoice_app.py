@@ -190,7 +190,7 @@ def generate_sales_pdf(data, out_path):
         ["Chassis No", data["chassis"]],
         ["Color", data["color"]],
         ["Engine Capacity", "435.6 cc"],
-        ["Manufactured Year", "2025"],
+        ["Manufactured Year", str(datetime.now().year)],
         ["Country of Origin", "India"],
     ]
     vt = Table(v, colWidths=[150, 250])
