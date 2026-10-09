@@ -229,3 +229,138 @@ describe('customers + invoices', () => {
     expect(String.fromCharCode(...buf.slice(0, 5))).toBe('%PDF-');
   });
 });
+
+describe('stock: parts movements', () => {
+  let partId = '';
+
+  test('create part', async () => {
+    const res = await request('/api/parts', {
+      method: 'POST',
+      body: JSON.stringify({
+        sku: 'PLG-100', name: 'Brake Lining Set', category: 'BRAKES',
+        cost: '1200.00', price: '1800.00', qtyOnHand: '0', reorderLevel: '5',
+      }),
+    });
+    expect(res.status).toBe(201);
+    partId = (await res.json()).part.id;
+  });
+
+  test('duplicate sku rejected', async () => {
+    const res = await request('/api/parts', {
+      method: 'POST',
+      body: JSON.stringify({ sku: 'PLG-100', name: 'Duplicate' }),
+    });
+    expect(res.status).toBe(409);
+  });
+
+  test('receive stock: PURCHASE must be positive', async () => {
+    const ok = await request(`/api/parts/${partId}/movements`, {
+      method: 'POST',
+      body: JSON.stringify({ qty: 10, reason: 'PURCHASE' }),
+    });
+    expect(ok.status).toBe(201);
+    expect((await ok.json()).qtyOnHand).toBe('10.00');
+
+    const bad = await request(`/api/parts/${partId}/movements`, {
+      method: 'POST',
+      body: JSON.stringify({ qty: -3, reason: 'PURCHASE' }),
+    });
+    expect(bad.status).toBe(400);
+    expect((await bad.json()).error).toMatch(/must be positive/);
+  });
+
+  test('issue stock: SERVICE_JOB must be negative', async () => {
+    const ok = await request(`/api/parts/${partId}/movements`, {
+      method: 'POST',
+      body: JSON.stringify({ qty: -4, reason: 'SERVICE_JOB' }),
+    });
+    expect(ok.status).toBe(201);
+    expect((await ok.json()).qtyOnHand).toBe('6.00');
+
+    const bad = await request(`/api/parts/${partId}/movements`, {
+      method: 'POST',
+      body: JSON.stringify({ qty: 4, reason: 'SERVICE_JOB' }),
+    });
+    expect(bad.status).toBe(400);
+    expect((await bad.json()).error).toMatch(/must be negative/);
+  });
+
+  test('cannot issue more than on hand', async () => {
+    const res = await request(`/api/parts/${partId}/movements`, {
+      method: 'POST',
+      body: JSON.stringify({ qty: -7, reason: 'SERVICE_JOB' }),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/insufficient stock/);
+
+    const list = await (await request('/api/parts?q=lining')).json();
+    expect(list.parts[0].qtyOnHand).toBe('6.00'); // unchanged after rollback
+  });
+
+  test('movement history newest first', async () => {
+    const res = await (await request(`/api/parts/${partId}/movements`)).json();
+    expect(res.movements).toHaveLength(2);
+    expect(res.movements[0].reason).toBe('SERVICE_JOB');
+    expect(res.movements[1].reason).toBe('PURCHASE');
+  });
+});
+
+describe('payments history', () => {
+  test('record payments then list newest first', async () => {
+    const invRes = await request('/api/invoices', {
+      method: 'POST',
+      body: JSON.stringify({ invoiceType: 'PROFORMA', customerId, price: '100000.00', down: '0.00' }),
+    });
+    expect(invRes.status).toBe(201);
+    const id = (await invRes.json()).invoice.id;
+
+    const p1 = await request('/api/payments', {
+      method: 'POST',
+      body: JSON.stringify({ invoiceId: id, amount: '40000.00', method: 'CASH' }),
+    });
+    expect(p1.status).toBe(201);
+    const p2 = await request('/api/payments', {
+      method: 'POST',
+      body: JSON.stringify({ invoiceId: id, amount: '10000.00', method: 'CHEQUE' }),
+    });
+    expect(p2.status).toBe(201);
+
+    const hist = await (await request(`/api/payments?invoiceId=${id}`)).json();
+    expect(hist.payments).toHaveLength(2);
+    expect(hist.payments[0].method).toBe('CHEQUE');
+    expect(hist.payments[1].method).toBe('CASH');
+
+    const inv = await (await request(`/api/invoices/${id}`)).json();
+    expect(inv.invoice.balance).toBe('50000.00');
+  });
+
+  test('invoiceId query param required', async () => {
+    expect((await request('/api/payments')).status).toBe(400);
+  });
+});
+
+describe('reports', () => {
+  const checkPdf = async (url: string) => {
+    const res = await request(url);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toBe('application/pdf');
+    const buf = new Uint8Array(await res.arrayBuffer());
+    expect(String.fromCharCode(...buf.slice(0, 5))).toBe('%PDF-');
+    expect(buf.length).toBeGreaterThan(20_000);
+  };
+
+  test('sales report renders a PDF', async () => {
+    if (!hasBrowser) return;
+    await checkPdf('/api/reports/sales/pdf?from=2026-01-01&to=2026-12-31');
+  });
+
+  test('stock report renders a PDF', async () => {
+    if (!hasBrowser) return;
+    await checkPdf('/api/reports/stock/pdf');
+  });
+
+  test('receivables report renders a PDF', async () => {
+    if (!hasBrowser) return;
+    await checkPdf('/api/reports/receivables/pdf');
+  });
+});

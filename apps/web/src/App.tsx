@@ -2,10 +2,19 @@ import { useState } from 'react'
 import { InvoiceForm } from './components/InvoiceForm'
 import { InvoiceList } from './components/InvoiceList'
 import { Login } from './components/Login'
+import { ReportsView } from './components/ReportsView'
+import { StockView } from './components/StockView'
 import { session, type User } from './lib/api'
 import { Button } from './components/ui/button'
 
-type View = 'new' | 'list'
+type View = 'new' | 'list' | 'stock' | 'reports'
+
+const NAV: Array<{ id: View; label: string }> = [
+  { id: 'new', label: 'New Invoice' },
+  { id: 'list', label: 'Invoices' },
+  { id: 'stock', label: 'Stock' },
+  { id: 'reports', label: 'Reports' },
+]
 
 function App() {
   const [user, setUser] = useState<User | null>(() => session.getUser())
@@ -22,13 +31,17 @@ function App() {
           <h1 className="text-3xl font-bold text-slate-900">Invoice App</h1>
           <p className="text-slate-600 text-sm">Gunawardhana Motors — dealer management</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant={view === 'new' ? 'default' : 'outline'} size="sm" onClick={() => setView('new')}>
-            New Invoice
-          </Button>
-          <Button variant={view === 'list' ? 'default' : 'outline'} size="sm" onClick={() => setView('list')}>
-            Invoices
-          </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {NAV.map((n) => (
+            <Button
+              key={n.id}
+              variant={view === n.id ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setView(n.id)}
+            >
+              {n.label}
+            </Button>
+          ))}
           <span className="text-xs text-slate-500 ml-2">
             {user.name} · {user.role}
           </span>
@@ -44,7 +57,10 @@ function App() {
           </Button>
         </div>
       </div>
-      {view === 'new' ? <InvoiceForm /> : <InvoiceList />}
+      {view === 'new' && <InvoiceForm />}
+      {view === 'list' && <InvoiceList />}
+      {view === 'stock' && <StockView />}
+      {view === 'reports' && <ReportsView />}
     </div>
   )
 }

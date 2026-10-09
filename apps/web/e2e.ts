@@ -49,6 +49,36 @@ try {
   console.log('LIST ROWS:', rows);
   await page.screenshot({ path: 'e2e-2-list.png' });
 
+  // 4. record a payment against it (balance 1,500,000 -> 1,450,000)
+  await page.locator('button[title="Payments"]').first().click();
+  await page.waitForSelector('text=No payments recorded yet', { timeout: 10000 });
+  await page.fill('input[type="number"]', '50000');
+  await page.getByRole('button', { name: 'Record payment' }).click();
+  await page.waitForSelector('text=Rs. 1,450,000.00', { timeout: 10000 });
+  console.log('PAYMENT OK: balance drawn down to 1,450,000');
+  await page.screenshot({ path: 'e2e-3-payment.png' });
+
+  // 5. stock view: vehicles + parts tabs render
+  await page.click('button:has-text("Stock")');
+  await page.waitForSelector('text=Vehicle Stock', { timeout: 10000 });
+  await page.click('button:has-text("Parts")');
+  await page.waitForSelector('text=Parts Inventory', { timeout: 10000 });
+  await page.screenshot({ path: 'e2e-4-stock.png' });
+  console.log('STOCK VIEW OK');
+
+  // 6. reports: sales PDF downloads
+  await page.click('button:has-text("Reports")');
+  await page.waitForSelector('text=Printable A4 PDFs', { timeout: 10000 });
+  const [reportDl] = await Promise.all([
+    page.waitForEvent('download', { timeout: 45000 }),
+    page.locator('button:has-text("Download PDF")').first().click(),
+  ]);
+  const reportName = reportDl.suggestedFilename();
+  if (!reportName.startsWith('SalesReport_')) throw new Error(`unexpected report name: ${reportName}`);
+  await reportDl.saveAs('e2e-report.pdf');
+  console.log('REPORT DOWNLOAD OK:', reportName);
+  await page.screenshot({ path: 'e2e-5-reports.png' });
+
   if (pageErrors.length) throw new Error(`page errors: ${pageErrors.join('; ')}`);
   console.log('E2E PASS');
 } catch (e) {

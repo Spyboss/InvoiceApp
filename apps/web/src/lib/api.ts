@@ -4,7 +4,7 @@
  * Type-only imports come from @erp/shared so screen code can't drift from the
  * server contract; runtime code is dependency-free (fetch + localStorage).
  */
-import type { InvoiceType, Role, VehicleStatus } from '@erp/shared';
+import type { InvoiceType, MovementReason, PaymentMethod, Role, VehicleStatus } from '@erp/shared';
 
 export interface User {
   id: string;
@@ -61,6 +61,36 @@ export interface Invoice {
 
 export interface InvoiceWithCustomer extends Invoice {
   customer: Customer;
+}
+
+export interface Payment {
+  id: string;
+  invoiceId: string;
+  amount: string;
+  method: PaymentMethod;
+  paidAt: string;
+  notes: string | null;
+}
+
+export interface Part {
+  id: string;
+  sku: string;
+  name: string;
+  category: string | null;
+  cost: string;
+  price: string;
+  qtyOnHand: string;
+  reorderLevel: string;
+}
+
+export interface PartMovement {
+  id: string;
+  partId: string;
+  qty: string;
+  reason: MovementReason;
+  refType: string | null;
+  refId: string | null;
+  createdAt: string;
 }
 
 export interface InvoiceCreateInput {
@@ -149,6 +179,22 @@ const qs = (params: Record<string, string | undefined>) => {
   return parts.length ? `?${parts.join('&')}` : '';
 };
 
+/** Authenticated binary download (PDFs). */
+async function download(path: string): Promise<{ blob: Blob; filename: string }> {
+  const token = session.getToken();
+  const res = await fetch(path, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    const body: unknown = await res.json().catch(() => null);
+    const err = (body as { error?: unknown } | null)?.error;
+    throw new ApiError(res.status, typeof err === 'string' ? err : `HTTP ${res.status}`);
+  }
+  const disposition = res.headers.get('Content-Disposition') ?? '';
+  const match = disposition.match(/filename="([^"]+)"/);
+  return { blob: await res.blob(), filename: match?.[1] ?? 'document.pdf' };
+}
+
 // ------------------------------------------------------------------ api
 export const api = {
   // auth
@@ -184,20 +230,55 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  async invoicePdf(id: string): Promise<{ blob: Blob; filename: string }> {
-    const token = session.getToken();
-    const res = await fetch(`/api/invoices/${id}/pdf`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (!res.ok) {
-      const body: unknown = await res.json().catch(() => null);
-      const err = (body as { error?: unknown } | null)?.error;
-      throw new ApiError(res.status, typeof err === 'string' ? err : `HTTP ${res.status}`);
-    }
-    const disposition = res.headers.get('Content-Disposition') ?? '';
-    const match = disposition.match(/filename="([^"]+)"/);
-    return { blob: await res.blob(), filename: match?.[1] ?? 'invoice.pdf' };
-  },
+  invoicePdf: (id: string) => download(`/api/invoices/${id}/pdf`),
+
+  // payments
+  payments: (invoiceId: string) =>
+    request<{ payments: Payment[] }>(`/api/payments${qs({ invoiceId })}`),
+  recordPayment: (data: { invoiceId: string; amount: string; method: PaymentMethod; notes?: string }) =>
+    request<{ payment: Payment; invoiceBalance: string }>('/api/payments', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // parts inventory
+  parts: (q?: string) => request<{ parts: Part[] }>(`/api/parts${qs({ q })}`),
+  createPart: (data: { sku: string; name: string; category?: string; cost?: string; price?: string; reorderLevel?: string }) =>
+    request<{ part: Part }>('/api/parts', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  partMovements: (partId: string) =>
+    request<{ movements: PartMovement[] }>(`/api/parts/${partId}/movements`),
+  createPartMovement: (
+    partId: string,
+    data: { qty: number; reason: MovementReason },
+  ) =>
+    request<{ movement: PartMovement; qtyOnHand: string }>(`/api/parts/${partId}/movements`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // stock intake
+  createVehicle: (data: {
+    chassisNo: string;
+    engineNo: string;
+    model: string;
+    type: string;
+    color: string;
+    yom: number;
+    cost: string;
+    price: string;
+    make?: string;
+  }) =>
+    request<{ vehicle: Vehicle }>('/api/vehicles', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // reports
+  reportPdf: (name: 'sales' | 'stock' | 'receivables', params: Record<string, string | undefined> = {}) =>
+    download(`/api/reports/${name}/pdf${qs(params)}`),
 };
 
 // -------------------------------------------------------------- downloads

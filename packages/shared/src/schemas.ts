@@ -137,3 +137,16 @@ export const partMovementSchema = z.object({
   refId: z.string().optional(),
 });
 export type PartMovementInput = z.infer<typeof partMovementSchema>;
+
+// POST /api/parts/:id/movements — qty is SIGNED (+in / -out); the server
+// validates the sign against the reason and guards against negative stock.
+export const partMovementPostSchema = z.object({
+  qty: z
+    .union([z.string(), z.number()])
+    .transform(Number)
+    .refine((n) => Number.isFinite(n) && n !== 0, 'qty must be a non-zero number'),
+  reason: z.enum(MOVEMENT_REASONS),
+  refType: z.string().optional(),
+  refId: z.string().optional(),
+});
+export type PartMovementPostInput = z.infer<typeof partMovementPostSchema>;
