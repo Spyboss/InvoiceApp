@@ -187,6 +187,36 @@ describe('customers + invoices', () => {
     expect(String.fromCharCode(...buf.slice(0, 5))).toBe('%PDF-');
   });
 
+  test('double-sell guard: one vehicle cannot back two invoices', async () => {
+    const vRes = await request('/api/vehicles', {
+      method: 'POST',
+      body: JSON.stringify({
+        chassisNo: 'MBX1129CDTF779901', engineNo: 'A6F0187499',
+        model: 'APE Classic DX', type: 'PICKUP', color: 'Star White',
+        yom: 2026, price: '1795000', cost: '1500000',
+      }),
+    });
+    expect(vRes.status).toBe(201);
+    const vid = (await vRes.json()).vehicle.id;
+
+    const payload = JSON.stringify({
+      invoiceType: 'SALES_CASH', customerId, vehicleId: vid,
+      price: '1795000.00', down: '295000.00',
+    });
+    const first = await request('/api/invoices', { method: 'POST', body: payload });
+    expect(first.status).toBe(201);
+    const firstId = (await first.json()).invoice.id;
+
+    const second = await request('/api/invoices', { method: 'POST', body: payload });
+    expect(second.status).toBe(400);
+    expect((await second.json()).error).toMatch(/vehicle not available/);
+
+    // rolled back cleanly: still SOLD, linked to the FIRST invoice
+    const v = await (await request(`/api/vehicles/${vid}`)).json();
+    expect(v.vehicle.status).toBe('SOLD');
+    expect(v.vehicle.invoiceId).toBe(firstId);
+  });
+
   test('proforma renders to a real PDF', async () => {
     if (!hasBrowser) return; // CI without a browser — parity harness covers this elsewhere
     const list = await (await request('/api/invoices?type=PROFORMA')).json();

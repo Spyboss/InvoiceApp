@@ -8,7 +8,7 @@ import { buildProformaHtml, buildSalesHtml, renderPdf, type ProformaData, type S
 import { audit } from '../audit';
 import { requireAuth } from '../auth';
 import { fromCents, toCents } from '../money';
-import { nextInvoiceNumber } from '../numbering';
+import { allocateInvoiceNumber } from '../numbering';
 
 type InvoiceWithRefs = Invoice & { customer: Customer; vehicle: Vehicle | null };
 
@@ -100,55 +100,75 @@ export function invoiceRoutes(db: Db): Hono {
     const date = new Date(input.date);
     const year = date.getFullYear();
     const balance = fromCents(toCents(input.price) - toCents(input.down));
-
     const id = randomUUID();
-    const invoiceNo = await nextInvoiceNumber(db, input.invoiceType, year);
 
-    // snapshot: authoritative values come from the stock vehicle when attached
-    let snapshot = {
-      model: input.model ?? null,
-      engineNo: input.engineNo ?? null,
-      chassisNo: input.chassisNo ?? null,
-      color: input.color ?? null,
-      vehicleType: input.vehicleType ?? null,
-      yom: input.yom ?? null,
-    };
-    if (input.vehicleId) {
-      const [v] = await db.select().from(vehicles).where(eq(vehicles.id, input.vehicleId)).limit(1);
-      if (!v) return c.json({ error: 'unknown vehicle' }, 400);
-      snapshot = {
-        model: v.model, engineNo: v.engineNo, chassisNo: v.chassisNo,
-        color: v.color, vehicleType: v.type, yom: v.yom,
-      };
+    // One transaction: vehicle lock + number allocation + invoice row + stock
+    // flip + audit commit or roll back together — a failure can never leave a
+    // sold vehicle AVAILABLE (double-sell) or an invoice missing its number.
+    let row!: typeof invoices.$inferInsert;
+    try {
+      row = await (db as any).transaction(async (tx: any) => {
+        // snapshot: authoritative values come from the stock vehicle when attached
+        let snapshot = {
+          model: input.model ?? null,
+          engineNo: input.engineNo ?? null,
+          chassisNo: input.chassisNo ?? null,
+          color: input.color ?? null,
+          vehicleType: input.vehicleType ?? null,
+          yom: input.yom ?? null,
+        };
+        if (input.vehicleId) {
+          // FOR UPDATE: a concurrent create for the same vehicle blocks here
+          const [v] = await tx
+            .select().from(vehicles)
+            .where(eq(vehicles.id, input.vehicleId))
+            .for('update')
+            .limit(1);
+          if (!v) throw new Error('unknown vehicle');
+          if (v.status !== 'AVAILABLE') throw new Error(`vehicle not available (status ${v.status})`);
+          snapshot = {
+            model: v.model, engineNo: v.engineNo, chassisNo: v.chassisNo,
+            color: v.color, vehicleType: v.type, yom: v.yom,
+          };
+        }
+
+        const invoiceNo = await allocateInvoiceNumber(tx, input.invoiceType, year);
+        const row: typeof invoices.$inferInsert = {
+          id,
+          invoiceType: input.invoiceType,
+          invoiceNo,
+          year,
+          date,
+          customerId: input.customerId,
+          financeCompany: input.financeCompany ?? null,
+          financeAddress: input.financeAddress ?? null,
+          delivery: input.delivery ?? null,
+          dealer: input.dealer ?? null,
+          vehicleId: input.vehicleId ?? null,
+          ...snapshot,
+          price: input.price,
+          down: input.down,
+          balance,
+          isLeasing: input.invoiceType === 'SALES_LEASING',
+          signatory: input.signatory ?? null,
+          status: input.status,
+          createdBy: c.get('user').sub,
+        };
+        await tx.insert(invoices).values(row);
+
+        if (input.vehicleId) {
+          await tx.update(vehicles).set({ status: 'SOLD', invoiceId: id }).where(eq(vehicles.id, input.vehicleId));
+        }
+        await audit(tx, c.get('user'), 'CREATE', 'invoice', id, null, row as unknown as Record<string, unknown>);
+        return row;
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '';
+      if (msg === 'unknown vehicle' || msg.startsWith('vehicle not available')) {
+        return c.json({ error: msg }, 400);
+      }
+      throw e;
     }
-
-    const row = {
-      id,
-      invoiceType: input.invoiceType,
-      invoiceNo,
-      year,
-      date,
-      customerId: input.customerId,
-      financeCompany: input.financeCompany ?? null,
-      financeAddress: input.financeAddress ?? null,
-      delivery: input.delivery ?? null,
-      dealer: input.dealer ?? null,
-      vehicleId: input.vehicleId ?? null,
-      ...snapshot,
-      price: input.price,
-      down: input.down,
-      balance,
-      isLeasing: input.invoiceType === 'SALES_LEASING',
-      signatory: input.signatory ?? null,
-      status: input.status,
-      createdBy: c.get('user').sub,
-    };
-    await db.insert(invoices).values(row);
-
-    if (input.vehicleId) {
-      await db.update(vehicles).set({ status: 'SOLD', invoiceId: id }).where(eq(vehicles.id, input.vehicleId));
-    }
-    await audit(db, c.get('user'), 'CREATE', 'invoice', id, null, row as unknown as Record<string, unknown>);
     return c.json({ invoice: row }, 201);
   });
 
