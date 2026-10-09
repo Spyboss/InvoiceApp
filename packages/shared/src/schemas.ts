@@ -70,6 +70,7 @@ export const invoiceCreateSchema = z.object({
   customerId: z.string(),
   financeCompany: z.string().optional(),
   financeAddress: z.string().optional(),
+  delivery: z.string().optional(),
   dealer: z.string().optional(),
   vehicleId: z.string().optional(),
   price: decimal,

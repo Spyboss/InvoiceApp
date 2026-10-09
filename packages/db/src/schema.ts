@@ -93,6 +93,7 @@ export const invoices = pgTable('invoices', {
   customerId: text('customer_id').notNull().references(() => customers.id),
   financeCompany: text('finance_company'),
   financeAddress: text('finance_address'),
+  delivery: text('delivery'),                 // delivery address (leasing invoices)
   dealer: text('dealer'),
   vehicleId: text('vehicle_id').references(() => vehicles.id),
   price: text('price').notNull(),             // decimal as text — exact money math

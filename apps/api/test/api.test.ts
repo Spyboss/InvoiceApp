@@ -132,6 +132,47 @@ describe('customers + invoices', () => {
     expect(body.invoices[0].customer.name).toBe('Mudiyanselage Kasun Perera');
   });
 
+  test('sales leasing invoice: vehicle mark + own counter + PDF', async () => {
+    // stock unit to sell
+    const vRes = await request('/api/vehicles', {
+      method: 'POST',
+      body: JSON.stringify({
+        chassisNo: 'MBX1129CDTF771204', engineNo: 'A6F0187429',
+        model: 'APE Classic DX', type: 'PICKUP', color: 'Star White',
+        yom: 2026, price: '1795000', cost: '1500000',
+      }),
+    });
+    expect(vRes.status).toBe(201);
+    const vehicleId = (await vRes.json()).vehicle.id;
+
+    const invRes = await request('/api/invoices', {
+      method: 'POST',
+      body: JSON.stringify({
+        invoiceType: 'SALES_LEASING', customerId, vehicleId,
+        price: '1795000.00', down: '295000.00',
+        delivery: 'No. 14, Lake Road, Matara',
+      }),
+    });
+    expect(invRes.status).toBe(201);
+    const inv = (await invRes.json()).invoice;
+    expect(inv.invoiceNo).toBe('0001'); // leasing has its own sequence
+    expect(inv.balance).toBe('1500000.00');
+    expect(inv.delivery).toBe('No. 14, Lake Road, Matara');
+
+    // stock is now SOLD and linked
+    const v = await (await request(`/api/vehicles/${vehicleId}`)).json();
+    expect(v.vehicle.status).toBe('SOLD');
+    expect(v.vehicle.invoiceId).toBe(inv.id);
+
+    if (!hasBrowser) return;
+    const pdfRes = await request(`/api/invoices/${inv.id}/pdf`);
+    expect(pdfRes.status).toBe(200);
+    expect(pdfRes.headers.get('Content-Type')).toBe('application/pdf');
+    const buf = new Uint8Array(await pdfRes.arrayBuffer());
+    expect(buf.length).toBeGreaterThan(30_000);
+    expect(String.fromCharCode(...buf.slice(0, 5))).toBe('%PDF-');
+  });
+
   test('proforma renders to a real PDF', async () => {
     if (!hasBrowser) return; // CI without a browser — parity harness covers this elsewhere
     const list = await (await request('/api/invoices?type=PROFORMA')).json();

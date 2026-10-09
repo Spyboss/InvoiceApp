@@ -22,8 +22,8 @@ export function createDb(opts: { url?: string; dataDir?: string } = {}): Db {
   if (url.startsWith('postgres')) {
     return drizzlePg(postgres(url, { max: 10 }), { schema });
   }
-  // Embedded PGlite: file-backed when a data dir is given, :memory: otherwise.
-  const pglite = new PGlite(opts.dataDir ?? ':memory:');
+  // Embedded PGlite: file-backed when a data dir is given, in-memory otherwise.
+  const pglite = new PGlite(opts.dataDir || undefined);
   return drizzlePglite(pglite, { schema });
 }
 

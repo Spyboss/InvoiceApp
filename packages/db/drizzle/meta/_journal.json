@@ -8,6 +8,13 @@
       "when": 1791528262196,
       "tag": "0000_dark_wild_pack",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791531618676,
+      "tag": "0001_clammy_vulture",
+      "breakpoints": true
     }
   ]
 }

@@ -2,29 +2,64 @@ import { randomUUID } from 'node:crypto';
 import { desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { customers, invoices, vehicles, type Db, type Invoice } from '@erp/db';
-import { invoiceCreateSchema } from '@erp/shared';
-import { buildProformaHtml, renderPdf } from '@erp/pdf';
+import type { Customer, Vehicle } from '@erp/db';
+import { DEALER, DEFAULT_SIGNATORY, invoiceCreateSchema } from '@erp/shared';
+import { buildProformaHtml, buildSalesHtml, renderPdf, type ProformaData, type SalesData } from '@erp/pdf';
 import { audit } from '../audit';
 import { requireAuth } from '../auth';
 import { fromCents, toCents } from '../money';
 import { nextInvoiceNumber } from '../numbering';
 
-/** Map a stored invoice row onto the proforma template data. */
-function proformaData(inv: Invoice, cust: { name: string; nic: string | null; address: string | null }) {
+type InvoiceWithRefs = Invoice & { customer: Customer; vehicle: Vehicle | null };
+
+const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+/** Proforma document data — mirrors generate_proforma_pdf() in web_app.py. */
+function proformaData(inv: InvoiceWithRefs): ProformaData {
+  const v = inv.vehicle;
   const spaced = (s: string) => s.split('').join(' ');
+  const d = new Date(inv.date);
   return {
     invoiceNo: spaced(inv.invoiceNo),
-    date: `${String(new Date(inv.date).getDate()).padStart(2, '0')} /${String(new Date(inv.date).getMonth() + 1).padStart(2, '0')}/${new Date(inv.date).getFullYear()}`,
-    customer: cust.name.toUpperCase(),
-    custAddr: cust.address ?? '',
-    nic: cust.nic ?? '',
+    date: `${String(d.getDate()).padStart(2, '0')} /${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`,
+    customer: inv.customer.name.toUpperCase(),
+    custAddr: inv.customer.address ?? '',
+    nic: inv.customer.nic ?? '',
     financeCompany: inv.financeCompany ?? '',
     financeAddress: inv.financeAddress ?? '',
-    model: '', type: '', color: '', yom: '', engine: '', chassis: '', // vehicle detail joins land in M2
+    model: v?.model ?? '',
+    type: v?.type ?? '',
+    color: v?.color ?? '',
+    yom: v ? String(v.yom) : '',
+    engine: v?.engineNo ?? '',
+    chassis: v?.chassisNo ?? '',
     price: `RS.${Number(inv.price).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
     down: `RS.${Number(inv.down).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
     balance: `RS .${Number(inv.balance).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
-    signatory: inv.signatory ?? 'Yashodha Rashmi',
+    signatory: inv.signatory ?? DEFAULT_SIGNATORY,
+  };
+}
+
+/** Sales document data — mirrors generate_sales_pdf() in web_app.py. */
+function salesData(inv: InvoiceWithRefs): SalesData {
+  const v = inv.vehicle;
+  return {
+    invoiceNo: inv.invoiceNo,                       // printed raw (unlike proforma's spaced style)
+    date: iso(new Date(inv.date)),
+    dealer: inv.dealer ?? DEALER,
+    customer: inv.customer.name,
+    custAddr: inv.customer.address ?? '',
+    nic: inv.customer.nic ?? '',
+    model: v?.model ?? '',
+    engine: v?.engineNo ?? '',
+    chassis: v?.chassisNo ?? '',
+    color: v?.color ?? '',
+    year: String(new Date().getFullYear()),         // ReportLab parity: current year
+    price: inv.price,
+    down: inv.down,
+    balance: inv.balance,
+    isLeasing: inv.invoiceType === 'SALES_LEASING',
+    delivery: inv.delivery ?? '',
   };
 }
 
@@ -46,7 +81,7 @@ export function invoiceRoutes(db: Db): Hono {
   app.get('/:id', async (c) => {
     const [row] = await db.query.invoices.findMany({
       where: (t, { eq }) => eq(t.id, c.req.param('id')),
-      with: { customer: true, payments: true },
+      with: { customer: true, payments: true, vehicle: true },
       limit: 1,
     });
     if (!row) return c.json({ error: 'not found' }, 404);
@@ -76,6 +111,7 @@ export function invoiceRoutes(db: Db): Hono {
       customerId: input.customerId,
       financeCompany: input.financeCompany ?? null,
       financeAddress: input.financeAddress ?? null,
+      delivery: input.delivery ?? null,
       dealer: input.dealer ?? null,
       vehicleId: input.vehicleId ?? null,
       price: input.price,
@@ -96,18 +132,20 @@ export function invoiceRoutes(db: Db): Hono {
   });
 
   app.get('/:id/pdf', async (c) => {
-    const [inv] = await db.select().from(invoices).where(eq(invoices.id, c.req.param('id'))).limit(1);
+    const inv = (await db.query.invoices.findFirst({
+      where: (t, { eq }) => eq(t.id, c.req.param('id')),
+      with: { customer: true, vehicle: true },
+    })) as InvoiceWithRefs | undefined;
     if (!inv) return c.json({ error: 'not found' }, 404);
-    const [cust] = await db.select().from(customers).where(eq(customers.id, inv.customerId)).limit(1);
-    if (!cust) return c.json({ error: 'invoice has no customer' }, 500);
 
-    if (inv.invoiceType !== 'PROFORMA') {
-      return c.json({ error: 'sales invoice template lands in M2 — use type=PROFORMA for now' }, 501);
-    }
-    const pdf = renderPdf(buildProformaHtml(proformaData(inv, cust)));
+    const html = inv.invoiceType === 'PROFORMA'
+      ? buildProformaHtml(proformaData(inv))
+      : buildSalesHtml(salesData(inv));
+    const pdf = renderPdf(html);
+    const name = `${inv.invoiceType === 'PROFORMA' ? 'Proforma' : 'Sales'}_${inv.invoiceNo}_${inv.customer.name.replace(/[^\w]+/g, '')}.pdf`;
     return c.body(pdf, 200, {
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="Proforma_${inv.invoiceNo.replace(/\\s/g, '')}.pdf"`,
+      'Content-Disposition': `attachment; filename="${name}"`,
     });
   });
 
