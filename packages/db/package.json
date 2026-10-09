@@ -1,0 +1,19 @@
+{
+  "name": "@erp/db",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "generate": "drizzle-kit generate",
+    "migrate": "bun run src/migrate.ts",
+    "test": "echo 'no tests in @erp/db'"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.2.14",
+    "@erp/shared": "workspace:*",
+    "drizzle-orm": "^0.36.4",
+    "postgres": "^3.4.5"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.28.1"
+  }
+}

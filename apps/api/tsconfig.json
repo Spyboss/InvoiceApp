@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "@erp/db": ["../../packages/db/src/index.ts"],
+      "@erp/shared": ["../../packages/shared/src/index.ts"],
+      "@erp/pdf": ["../../packages/pdf/src/index.ts"]
+    }
+  },
+  "include": ["src", "test"]
+}

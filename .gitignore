@@ -37,3 +37,12 @@ dist/
 .kiro/
 .qoder/
 .augment/
+node_modules/
+dist/
+out/
+.env
+*.tsbuildinfo
+.edge-profile/
+*.pdf
+invoice_log.csv
+invoices.csv

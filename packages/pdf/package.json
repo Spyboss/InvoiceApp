@@ -1,0 +1,13 @@
+{
+  "name": "@erp/pdf",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "bun test",
+    "calibrate": "bun run reference-render.mjs"
+  },
+  "devDependencies": {
+    "@napi-rs/canvas": "^0.1.65",
+    "pdfjs-dist": "^4.8.69"
+  }
+}

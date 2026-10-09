@@ -1,0 +1,22 @@
+{
+  "name": "@erp/api",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@erp/db": "workspace:*",
+    "@erp/pdf": "workspace:*",
+    "@erp/shared": "workspace:*",
+    "drizzle-orm": "^0.36.4",
+    "hono": "^4.6.12",
+    "jose": "^5.9.6",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

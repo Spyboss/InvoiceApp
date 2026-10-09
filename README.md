@@ -1,5 +1,37 @@
 # 📄 Invoice / Proforma Generator
 
+> **Worktree `feat/erp-ts` — TypeScript rewrite.** This branch evolves InvoiceApp into
+> a local ERP/DMS: **Bun + Hono + Drizzle + React** monorepo (see layout below).
+> The original Streamlit/FastAPI code still lives in the repo root and keeps working —
+> only `apps/` and `packages/` are new.
+
+## TS monorepo layout
+
+```
+apps/
+  api/       Hono API server on Bun (auth, customers, vehicles, invoices, payments)
+  web/       React + Vite + Tailwind client (ported from client/)
+packages/
+  shared/    zod schemas + constants shared by api & web
+  db/        Drizzle schema (full DMS: 12 tables) + migrations (Postgres; PGlite for dev/test)
+  pdf/       HTML → headless Chromium PDF pipeline (pixel-matched proforma)
+```
+
+### Run it
+
+```bash
+bun install
+bun run db:generate        # after schema changes
+bun run dev:api            # http://localhost:8787  (embedded PGlite unless DATABASE_URL set)
+bun run dev:web            # Vite dev server, proxies /api -> :8787
+bun test                   # workspace tests (api suite: auth, invoices, numbering, PDF)
+```
+
+First registered user becomes `ADMIN`. `DATABASE_URL=postgres://...` switches from the
+embedded PGlite to a real Postgres (Railway/Fly in the cloud edition).
+
+---
+
 A lightweight web application for generating **Sales Invoices**, **Leasing Invoices**, **Proforma Invoices**, and **Advance Payment Receipts** for dealerships.
 
 **Live Web App:** https://piaggio.streamlit.app

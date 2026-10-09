@@ -1,0 +1,21 @@
+{
+  "name": "invoiceapp-ts",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "bun run --filter @erp/api dev",
+    "dev:web": "bun run --filter @erp/web dev",
+    "test": "bun run --filter '*' test",
+    "typecheck": "bun run --filter '*' typecheck",
+    "db:generate": "bun run --filter @erp/db generate",
+    "db:migrate": "bun run --filter @erp/db migrate"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.14",
+    "typescript": "^5.6.3"
+  }
+}
