@@ -46,3 +46,6 @@ out/
 *.pdf
 invoice_log.csv
 invoices.csv
+
+# Embedded dev database
+.data/
