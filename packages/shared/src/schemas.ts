@@ -73,6 +73,13 @@ export const invoiceCreateSchema = z.object({
   delivery: z.string().optional(),
   dealer: z.string().optional(),
   vehicleId: z.string().optional(),
+  // vehicle snapshot (used when no stock vehicle is attached)
+  model: z.string().optional(),
+  engineNo: z.string().optional(),
+  chassisNo: z.string().optional(),
+  color: z.string().optional(),
+  vehicleType: z.string().optional(),
+  yom: z.number().int().optional(),
   price: decimal,
   down: decimal.default('0'),
   signatory: z.string().optional(),

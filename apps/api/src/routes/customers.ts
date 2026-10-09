@@ -11,7 +11,11 @@ export function customerRoutes(db: Db): Hono {
   app.use('*', requireAuth);
 
   app.get('/', async (c) => {
+    const q = c.req.query('q');
     const rows = await db.query.customers.findMany({
+      where: q
+        ? (t, { ilike, or }) => or(ilike(t.name, `%${q}%`), ilike(t.nic, `%${q}%`))
+        : undefined,
       limit: 100,
       orderBy: (t, { desc }) => [desc(t.createdAt)],
     });

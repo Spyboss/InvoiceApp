@@ -49,3 +49,7 @@ invoices.csv
 
 # Embedded dev database
 .data/
+
+# E2E run artifacts (screenshots, throwaway DB)
+e2e-data/
+e2e-*.png

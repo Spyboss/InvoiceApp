@@ -82,6 +82,16 @@ describe('customers + invoices', () => {
     customerId = (await res.json()).customer.id;
   });
 
+  test('customer search by q (name or nic)', async () => {
+    const byName = await (await request('/api/customers?q=kasun')).json();
+    expect(byName.customers).toHaveLength(1);
+    expect(byName.customers[0].id).toBe(customerId);
+    const byNic = await (await request('/api/customers?q=19901234')).json();
+    expect(byNic.customers).toHaveLength(1);
+    const none = await (await request('/api/customers?q=zzzznotfound')).json();
+    expect(none.customers).toHaveLength(0);
+  });
+
   test('proforma invoice gets number 0001 and computes balance', async () => {
     const res = await request('/api/invoices', {
       method: 'POST',
@@ -158,6 +168,10 @@ describe('customers + invoices', () => {
     expect(inv.invoiceNo).toBe('0001'); // leasing has its own sequence
     expect(inv.balance).toBe('1500000.00');
     expect(inv.delivery).toBe('No. 14, Lake Road, Matara');
+    // snapshot copied from the stock vehicle — documents are self-contained
+    expect(inv.model).toBe('APE Classic DX');
+    expect(inv.engineNo).toBe('A6F0187429');
+    expect(inv.vehicleType).toBe('PICKUP');
 
     // stock is now SOLD and linked
     const v = await (await request(`/api/vehicles/${vehicleId}`)).json();

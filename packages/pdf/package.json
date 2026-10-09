@@ -3,7 +3,7 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "test": "bun test",
+    "test": "echo no tests in @erp/pdf - parity gate: scripts/calibrate_sales.ts",
     "calibrate": "bun run reference-render.mjs"
   },
   "devDependencies": {

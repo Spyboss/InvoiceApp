@@ -15,6 +15,13 @@
       "when": 1791531618676,
       "tag": "0001_clammy_vulture",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791539679283,
+      "tag": "0002_secret_white_queen",
+      "breakpoints": true
     }
   ]
 }

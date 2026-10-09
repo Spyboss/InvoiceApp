@@ -26,25 +26,49 @@ export function findBrowser(): string {
   throw new Error('No Chromium/Chrome/Edge found — set CHROMIUM_PATH');
 }
 
-/** Render an HTML document to a PDF buffer (US Letter pages, no header/footer). */
+/** Render an HTML document to a PDF buffer (A4/Letter per template, no header/footer). */
 export function renderPdf(html: string): Uint8Array<ArrayBuffer> {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'erp-pdf-'));
   const htmlPath = path.join(dir, 'doc.html');
   const pdfPath = path.join(dir, 'doc.pdf');
   try {
     fs.writeFileSync(htmlPath, html, 'utf8');
-    const r = spawnSync(findBrowser(), [
+    const args = [
       '--headless', '--disable-gpu', '--no-first-run',
       `--user-data-dir=${path.join(dir, 'profile')}`,
       '--no-pdf-header-footer',
       `--print-to-pdf=${pdfPath}`,
       `file:///${htmlPath.replace(/\\/g, '/')}`,
-    ], { encoding: 'utf8', timeout: 60_000 });
-    if (!fs.existsSync(pdfPath)) {
-      throw new Error(`browser failed to print PDF: ${r.stderr || r.error?.message || 'unknown'}`);
+    ];
+    // Edge occasionally returns before the print job lands (and gets flaky
+    // when zombie headless processes pile up) — wait for the file to settle,
+    // then retry once before giving up.
+    let lastErr = '';
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const r = spawnSync(findBrowser(), args, { encoding: 'utf8', timeout: 60_000 });
+      lastErr = r.stderr || r.error?.message || 'unknown';
+      if (waitForPdf(pdfPath, 4000)) {
+        return new Uint8Array(fs.readFileSync(pdfPath));
+      }
+      if (fs.existsSync(pdfPath)) fs.rmSync(pdfPath, { force: true });
     }
-    return new Uint8Array(fs.readFileSync(pdfPath));
+    throw new Error(`browser failed to print PDF after 2 attempts: ${lastErr.slice(0, 500)}`);
   } finally {
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ }
   }
+}
+
+/** Wait until the PDF exists and its size stops changing (sync sleep). */
+function waitForPdf(p: string, timeoutMs: number): boolean {
+  const deadline = Date.now() + timeoutMs;
+  let last = -1;
+  while (Date.now() < deadline) {
+    try {
+      const size = fs.statSync(p).size;
+      if (size > 0 && size === last) return true;
+      last = size;
+    } catch { /* not yet */ }
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+  }
+  return false;
 }

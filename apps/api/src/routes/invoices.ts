@@ -27,12 +27,13 @@ function proformaData(inv: InvoiceWithRefs): ProformaData {
     nic: inv.customer.nic ?? '',
     financeCompany: inv.financeCompany ?? '',
     financeAddress: inv.financeAddress ?? '',
-    model: v?.model ?? '',
-    type: v?.type ?? '',
-    color: v?.color ?? '',
-    yom: v ? String(v.yom) : '',
-    engine: v?.engineNo ?? '',
-    chassis: v?.chassisNo ?? '',
+    // snapshot first, stock vehicle fallback (pre-snapshot rows)
+    model: inv.model ?? v?.model ?? '',
+    type: inv.vehicleType ?? v?.type ?? '',
+    color: inv.color ?? v?.color ?? '',
+    yom: inv.yom != null ? String(inv.yom) : v ? String(v.yom) : '',
+    engine: inv.engineNo ?? v?.engineNo ?? '',
+    chassis: inv.chassisNo ?? v?.chassisNo ?? '',
     price: `RS.${Number(inv.price).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
     down: `RS.${Number(inv.down).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
     balance: `RS .${Number(inv.balance).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
@@ -50,11 +51,11 @@ function salesData(inv: InvoiceWithRefs): SalesData {
     customer: inv.customer.name,
     custAddr: inv.customer.address ?? '',
     nic: inv.customer.nic ?? '',
-    model: v?.model ?? '',
-    engine: v?.engineNo ?? '',
-    chassis: v?.chassisNo ?? '',
-    color: v?.color ?? '',
-    year: String(new Date().getFullYear()),         // ReportLab parity: current year
+    model: inv.model ?? v?.model ?? '',
+    engine: inv.engineNo ?? v?.engineNo ?? '',
+    chassis: inv.chassisNo ?? v?.chassisNo ?? '',
+    color: inv.color ?? v?.color ?? '',
+    year: inv.yom != null ? String(inv.yom) : v ? String(v.yom) : String(new Date().getFullYear()), // explicit yom, stock yom, else current year
     price: inv.price,
     down: inv.down,
     balance: inv.balance,
@@ -102,6 +103,25 @@ export function invoiceRoutes(db: Db): Hono {
 
     const id = randomUUID();
     const invoiceNo = await nextInvoiceNumber(db, input.invoiceType, year);
+
+    // snapshot: authoritative values come from the stock vehicle when attached
+    let snapshot = {
+      model: input.model ?? null,
+      engineNo: input.engineNo ?? null,
+      chassisNo: input.chassisNo ?? null,
+      color: input.color ?? null,
+      vehicleType: input.vehicleType ?? null,
+      yom: input.yom ?? null,
+    };
+    if (input.vehicleId) {
+      const [v] = await db.select().from(vehicles).where(eq(vehicles.id, input.vehicleId)).limit(1);
+      if (!v) return c.json({ error: 'unknown vehicle' }, 400);
+      snapshot = {
+        model: v.model, engineNo: v.engineNo, chassisNo: v.chassisNo,
+        color: v.color, vehicleType: v.type, yom: v.yom,
+      };
+    }
+
     const row = {
       id,
       invoiceType: input.invoiceType,
@@ -114,6 +134,7 @@ export function invoiceRoutes(db: Db): Hono {
       delivery: input.delivery ?? null,
       dealer: input.dealer ?? null,
       vehicleId: input.vehicleId ?? null,
+      ...snapshot,
       price: input.price,
       down: input.down,
       balance,
