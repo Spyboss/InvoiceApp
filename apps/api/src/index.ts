@@ -4,6 +4,9 @@ import { createApp } from './app';
 import { env } from './env';
 
 export async function start(): Promise<void> {
+  if (env.JWT_SECRET === 'dev-only-secret-change-me') {
+    console.warn('[erp] WARNING: using the default JWT_SECRET — set JWT_SECRET before deploying.');
+  }
   const db: Db = createDb({ url: env.DATABASE_URL, dataDir: env.DB_DATA_DIR });
 
   // M1: apply migrations at boot (revisit idempotent migration strategy later).

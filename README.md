@@ -17,18 +17,55 @@ packages/
   pdf/       HTML → headless Chromium PDF pipeline (pixel-matched proforma)
 ```
 
-### Run it
+### Run it (development)
 
 ```bash
 bun install
 bun run db:generate        # after schema changes
 bun run dev:api            # http://localhost:8787  (embedded PGlite unless DATABASE_URL set)
 bun run dev:web            # Vite dev server, proxies /api -> :8787
-bun test                   # workspace tests (api suite: auth, invoices, numbering, PDF)
+bun test                   # workspace tests (api suite: auth, invoices, numbering, PDF, parts, reports)
 ```
 
-First registered user becomes `ADMIN`. `DATABASE_URL=postgres://...` switches from the
-embedded PGlite to a real Postgres (Railway/Fly in the cloud edition).
+First registered user becomes `ADMIN`.
+
+### 🖥️ Local edition (single process, offline)
+
+The built client is served by the API itself — one command, one port, no Vite,
+no cloud, no internet:
+
+```bash
+bun install
+bun run build:web          # build apps/web -> apps/web/dist (once, or after UI changes)
+bun run start              # http://localhost:8787 — API + UI + embedded PGlite (.data/)
+```
+
+Data lives in `apps/api/.data/` (file-backed PGlite = real Postgres in-process).
+Back it up by copying that folder. PDFs render via a local headless Chromium/Edge
+(`CHROMIUM_PATH=/usr/bin/chromium` on servers without Edge).
+
+### ☁️ Cloud edition
+
+```bash
+DATABASE_URL=postgres://… JWT_SECRET=<32+ random chars> bun run start
+```
+
+- `DATABASE_URL` switches every driver to real Postgres (Railway / Fly.io work well;
+  run `bun run db:migrate` against the URL first).
+- `JWT_SECRET` is **required** in production (the server warns on the dev default).
+- Cloudflare Workers needs a filesystem-less driver — use the Postgres URL with a
+  Workers-compatible driver, or deploy the API to Railway/Fly and put the static
+  `apps/web/dist` behind any CDN.
+
+### Status (milestones)
+
+| Milestone | State |
+| --- | --- |
+| M1 scaffold + full DMS schema + auth/customers/vehicles/invoices/payments | ✅ |
+| M2 sales/proforma PDFs matched to ReportLab (≤1pt gate) | ✅ |
+| M3 React client on typed API (login, invoice → PDF, list) | ✅ |
+| M4 stock (vehicles + parts), payments UI, multi-page report PDFs | ✅ |
+| M5 local/offline edition (single-process serve, docs) | ✅ |
 
 ---
 

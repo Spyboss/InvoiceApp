@@ -9,6 +9,8 @@
   "scripts": {
     "dev:api": "bun run --filter @erp/api dev",
     "dev:web": "bun run --filter @erp/web dev",
+    "build:web": "bun run --filter @erp/web build",
+    "start": "bun run --filter @erp/api start",
     "test": "bun run --filter '*' test",
     "typecheck": "bun run --filter '*' typecheck",
     "db:generate": "bun run --filter @erp/db generate",

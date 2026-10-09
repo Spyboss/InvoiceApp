@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { existsSync } from 'node:fs';
 import { beforeAll, describe, expect, test } from 'bun:test';
 import { createDb, migrate } from '@erp/db';
 import { findBrowser } from '@erp/pdf';
@@ -362,5 +363,33 @@ describe('reports', () => {
   test('receivables report renders a PDF', async () => {
     if (!hasBrowser) return;
     await checkPdf('/api/reports/receivables/pdf');
+  });
+});
+
+describe('local edition: built client served by the API', () => {
+  const distIndex = path.join(import.meta.dir, '..', '..', 'web', 'dist', 'index.html');
+  const hasDist = existsSync(distIndex);
+
+  test('GET / serves the built SPA', async () => {
+    if (!hasDist) return; // run `bun run build:web` first
+    const res = await request('/');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toContain('text/html');
+    expect(await res.text()).toContain('id="root"');
+  });
+
+  test('unknown UI paths fall back to the SPA shell', async () => {
+    if (!hasDist) return;
+    const res = await request('/some/client/route');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toContain('text/html');
+  });
+
+  test('API 404s stay JSON', async () => {
+    const res = await request('/api/definitely-not-a-route');
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error).toBe('not found');
+    expect(res.headers.get('Content-Type') ?? '').toContain('application/json');
   });
 });
