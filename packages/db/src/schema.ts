@@ -96,6 +96,7 @@ export const invoices = pgTable('invoices', {
   delivery: text('delivery'),                 // delivery address (leasing invoices)
   dealer: text('dealer'),
   // vehicle snapshot — documents stay self-contained even without a stock link
+  make: text('make'),
   model: text('model'),
   engineNo: text('engine_no'),
   chassisNo: text('chassis_no'),

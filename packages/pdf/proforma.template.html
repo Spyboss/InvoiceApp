@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Proforma Invoice - Gunawardhana Enterprises, Tangalle</title>
+<title>Proforma Invoice - Gunawardhana Motors</title>
 <meta name="author" content="Software solution by UHADEV - uhadev.com">
 <style>
   @page { size: 612pt 792pt; margin: 0; }
@@ -17,18 +17,36 @@
     font-kerning: none;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
+    font-family: Calibri, Carlito, sans-serif;
+    color: #000;
   }
-  /* absolutely positioned text run (white-space:pre keeps double spaces) */
-  .t { position: absolute; white-space: pre; color: #000; line-height: normal; }
-  /* font families — Windows system fonts now; bundle via @font-face later */
-  .f-cal   { font-family: Calibri, Carlito, sans-serif; }
-  .f-calb  { font-family: Calibri, Carlito, sans-serif; font-weight: 700; }
-  .f-camb  { font-family: Cambria, Caladea, serif; font-weight: 700; }
-  .f-tah   { font-family: Tahoma, sans-serif; font-weight: 700; }
-  .f-times { font-family: "Times New Roman", Tinos, serif; }
-  .b { position: absolute; background: #000; }
-  .img { position: absolute; display: block; }
-  .red { color: #FF0000; }
+  /* text column: 36 / 72 / 22.5 / 72 margins.
+     The grid breaks out to the left by tblInd (-45.25pt) as the docx sets it,
+     so it spans 26.75pt .. 593.25pt on the page. */
+  .flow { position: absolute; left: 72pt; top: 36pt; width: 468pt; }
+  /* pre-wrap keeps the space-padded label columns while still wrapping prose */
+  .p { white-space: pre-wrap; }
+  /* <w:tblStyle w:val="TableGrid"/> supplies no borders and zero cell padding —
+     every edge below comes from per-cell <w:tcBorders> and <w:tblPr><w:tblCellMar> */
+  table.g {
+    border-collapse: collapse;
+    table-layout: fixed;
+    width: 566.5pt;
+    margin-left: -45.25pt;
+    font-family: Calibri, Carlito, sans-serif;
+  }
+  table.g td {
+    border: 0.5pt solid #000;
+    padding: 0 2.85pt 0 5.4pt;
+    vertical-align: top;
+    white-space: pre-wrap;
+    font-family: Calibri, Carlito, sans-serif;
+  }
+  /* nil edges — rows 2+3 and 4+5 read as a single block in Word */
+  table.g td.nb { border-bottom: none; }
+  table.g td.nt { border-top: none; }
+  .wm { position: absolute; display: block; }
+  .lh { position: absolute; display: block; }
 </style>
 </head>
 <body>

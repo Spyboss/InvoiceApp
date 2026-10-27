@@ -1,162 +1,278 @@
 /**
- * Proforma invoice HTML — pixel-matched to the Singer sample document.
- * Coordinates were measured from the original PDF; baselines are corrected
- * with the calibrated ascent table (ascent.json, regenerated per machine by
- * `bun run reference-render.mjs`).
+ * Proforma invoice — Singer (SRI LANKA) PLC. format.
+ *
+ * Ground truth is BIBILE 01.docx (word/document.xml). There is no rendered
+ * PDF of that document anywhere on this machine, so the geometry below is
+ * derived from the OOXML directly rather than measured off a reference render:
+ *
+ *   page 612x792pt, margins 36 / 72 / 22.5 / 72
+ *   grid 566.5pt wide at tblInd -905 twips (-45.25pt), columns 257.45 + 309.05
+ *   7 rows, trHeight atLeast 302/1637/233/1863/143/1269/302 twips
+ *   every edge <w:tcBorders w:val="single" w:sz="4"> = 0.5pt, except the
+ *   nil edges that merge rows 2+3 and 4+5
+ *   <w:tblStyle w:val="TableGrid"/> carries NO borders and zero cell padding;
+ *   padding is <w:tblPr><w:tblCellMar> left 108 / right 57 twips
+ *
+ * Word's "auto" line spacing multiplies the font's natural line box, which CSS
+ * `line-height` does not — so every height is written out in pt from the
+ * measured Calibri ratio instead of a unitless multiplier.
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { wordmarkSvg } from './proforma.wordmark';
 
 export interface ProformaData {
-  invoiceNo: string;        // full display number, e.g. "S P G O 0 0 0 1 8 6"
-  date: string;             // "DD /MM/YYYY"
-  customer: string;         // upper-cased name
-  custAddr: string;
+  invoiceNo: string;          // printed as-is, e.g. "0001"
+  date: string;               // "DD/MM/YYYY"
+  customer: string;
   nic: string;
+  contact: string;            // <w:t>07</w:t><w:t>88585327</w:t> on the sample
   financeCompany: string;
-  financeAddress: string;
+  financeAddress: string;     // leasing company's address, not the customer's
+  make: string;
   model: string;
   type: string;
   color: string;
   yom: string;
   engine: string;
   chassis: string;
-  price: string;            // "RS.1,795,000.00"
-  down: string;             // "RS.295,000.00"
-  balance: string;          // "RS .1,500,000.00"
-  signatory: string;
+  price: string;              // "980000" -> printed "LKR 980000/-"
+  down: string;
+  balance: string;
+  vatNo: string;
+  remarks: string;
 }
 
-type Font = 'cal' | 'calb' | 'camb' | 'tah' | 'times';
-type Run = { x: number; b: number; size: number; font: Font; text: string; center?: boolean };
+/** Calibri's natural line box / font-size, measured in Edge — see header. */
+const CAL_LINE = 1.2225;
+const TWIP = 20;
 
-const CLASS: Record<Font, string> = {
-  cal: 'f-cal', calb: 'f-calb', camb: 'f-camb', tah: 'f-tah', times: 'f-times',
-};
+/** Carried over verbatim from the BIBILE 01.docx body. */
+export const PROFORMA_VAT_NO = '124008026-7000';
+export const PROFORMA_REMARKS =
+  'Please note that the above price offered is on prevailing rates of exchange, import duties, ' +
+  'other Government levies & any variations to the above will be adjusted in the final invoice.';
+
+const tw = (t: number) => t / TWIP;
+const lh = (size: number, line = 240) => +(size * CAL_LINE * (line / 240)).toFixed(4);
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 const ASSET = (name: string) => path.join(import.meta.dir, '..', 'assets', name);
 
 function assetDataUrl(name: string): string {
-  return `data:image/png;base64,${fs.readFileSync(ASSET(name)).toString('base64')}`;
+  const mime = name.endsWith('.jpg') || name.endsWith('.jpeg') ? 'jpeg' : 'png';
+  return `data:image/${mime};base64,${fs.readFileSync(ASSET(name)).toString('base64')}`;
 }
 
-function loadAscent(): Record<string, number> {
-  const p = path.join(import.meta.dir, '..', 'ascent.json');
-  if (!fs.existsSync(p)) return {};
-  try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return {}; }
+type Para = {
+  size?: number;              // w:sz — Normal style is sz=20 (10pt)
+  line?: number;              // w:spacing/@w:line, 240 = single
+  after?: number;             // w:spacing/@w:after, twips
+  bold?: boolean;
+  left?: number;              // w:ind/@w:left, twips
+  right?: number;             // w:ind/@w:right, twips
+  firstLine?: number;         // w:ind/@w:firstLine, twips
+  jc?: 'center' | 'right' | 'both';
+};
+
+/** One <w:p>. Indents use padding so wrapped lines stay at the left indent —
+ *  these paragraphs carry no w:hanging, so Word gives them no hanging indent. */
+function para(html: string, s: Para = {}): string {
+  const size = s.size ?? 10;
+  const css = [`font-size:${size}pt`, `line-height:${lh(size, s.line ?? 240)}pt`];
+  if (s.after) css.push(`margin-bottom:${tw(s.after)}pt`);
+  if (s.left) css.push(`padding-left:${tw(s.left)}pt`);
+  if (s.right) css.push(`padding-right:${tw(s.right)}pt`);
+  if (s.firstLine) css.push(`text-indent:${tw(s.firstLine)}pt`);
+  if (s.jc) css.push(`text-align:${s.jc}`);
+  if (s.bold) css.push('font-weight:700');
+  // a <w:p> with no runs still occupies a full line in Word — a bare empty div
+  // has no line box in CSS, so force one
+  return `<div class="p" style="${css.join(';')}">${html || '&#160;'}</div>`;
 }
 
-const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+/** Word draws subscript at ~65% of the specified size, lowered. CSS
+ *  vertical-align:sub only lowers the baseline, so the size has to shrink here. */
+const SUB_SCALE = 0.65;
+const run = (text: string, size = 10, bold = false, sub = false) =>
+  `<span style="font-size:${+(size * (sub ? SUB_SCALE : 1)).toFixed(2)}pt${bold ? ';font-weight:700' : ''}${sub ? ';vertical-align:sub' : ''}">${esc(text)}</span>`;
+
+const COL0 = 257.45;
+const COL1 = 309.05;
+const td = (html: string, w: number, cls = '') =>
+  `<td class="${cls}" style="width:${w}pt">${html}</td>`;
+/** trHeight is atLeast, which is exactly how CSS treats a row height. */
+const tr = (h: number, html: string) => `<tr style="height:${h}pt">${html}</tr>`;
+
+/** List marker sits at the 0.5pt indent; the tab that follows lands on the
+ *  default 0.5in tab stop = 36pt from the text column. */
+const LIST_TAB = 36;
+// The docx list has no hanging indent and no explicit tab stop, so Word puts the
+// number at the 0.5pt indent and the body on the 36pt default stop; wrapped lines
+// fall back to the 0.5pt indent. Making the marker a fixed-width inline-block
+// pins the body to the tab stop no matter how wide the digits are.
+const num = (i: number, text: string, bold = false) =>
+  para(
+    `<span style="display:inline-block;width:${(LIST_TAB - tw(10)).toFixed(2)}pt">${i}.</span>${text}`,
+    { size: 11, line: 246, after: 30, left: 10, bold },
+  );
 
 export function buildProformaHtml(d: ProformaData): string {
-  const ASC_EL: number[] = loadAscent() as unknown as number[];
-  const ASC_FONT: Record<Font, number> = { cal: 0.95, calb: 0.95, camb: 0.95, tah: 0.98, times: 0.9 };
-
-  const T: Run[] = [
-    // header
-    { x: 448.1, b: 59, size: 28, font: 'tah', text: 'SINGER' },
-    { x: 227.4, b: 82.9, size: 14.05, font: 'cal', text: 'PROFORMA INVOICE' },
-    // row 1
-    { x: 37.9, b: 101.6, size: 12, font: 'cal', text: `Proforma Invoice. No.  ${d.invoiceNo}` },
-    { x: 295.3, b: 101.6, size: 12, font: 'cal', text: `DATE: ${d.date}` },
-    // row 2 left
-    { x: 37.9, b: 118, size: 11.05, font: 'cal', text: 'MANUFACTURER: INDIA' },
-    { x: 37.9, b: 133, size: 11.05, font: 'cal', text: 'PIAGGIO VEHICLES PVT LTD' },
-    { x: 37.9, b: 155.9, size: 11.05, font: 'cal', text: 'VIMAN NAGAR' },
-    { x: 37.9, b: 172, size: 11.05, font: 'cal', text: 'PUNE 411032,' },
-    { x: 37.9, b: 186.9, size: 11.05, font: 'cal', text: 'MAHARASHTRA' },
-    { x: 37.9, b: 206.1, size: 11.05, font: 'cal', text: 'INDIA' },
-    // row 2 right
-    { x: 295.4, b: 117.8, size: 12, font: 'cal', text: 'TO : THE MANAGER' },
-    { x: 322.6, b: 131, size: 12, font: 'cal', text: d.financeCompany },
-    { x: 322.6, b: 144, size: 12, font: 'cal', text: d.financeAddress },
-    { x: 292.6, b: 170.5, size: 11.05, font: 'cal', text: `O/A - ${d.customer}` },
-    { x: 301.1, b: 188.2, size: 11.05, font: 'cal', text: d.custAddr },
-    { x: 306, b: 206.5, size: 11.05, font: 'cal', text: `ID -${d.nic}` },
-    // row 3 left — description
-    { x: 40.7, b: 228.8, size: 12, font: 'cal', text: 'DESCRIPTION' },
-    { x: 37.9, b: 254.1, size: 11.05, font: 'cal', text: 'MAKE' },
-    { x: 109, b: 254.1, size: 11.05, font: 'cal', text: 'PIAGGIO' },
-    { x: 37.9, b: 267.4, size: 11.05, font: 'cal', text: 'MODEL' },
-    { x: 109, b: 268.5, size: 12, font: 'cal', text: d.model },
-    { x: 37.9, b: 289.3, size: 11.05, font: 'cal', text: 'TYPE' },
-    { x: 109, b: 291.3, size: 11.05, font: 'cal', text: d.type },
-    { x: 37.9, b: 302.2, size: 11.05, font: 'cal', text: 'COLOUR' },
-    { x: 109, b: 306.2, size: 11.05, font: 'cal', text: d.color },
-    { x: 37.9, b: 319.7, size: 11.05, font: 'cal', text: 'YOM' },
-    { x: 109, b: 321.2, size: 11.05, font: 'cal', text: d.yom },
-    { x: 37.9, b: 337.1, size: 11.05, font: 'cal', text: 'ENGINE NO' },
-    { x: 111.2, b: 337.7, size: 12, font: 'camb', text: d.engine },
-    { x: 37.9, b: 354.8, size: 11.05, font: 'cal', text: 'CHASSIS NO' },
-    { x: 113.5, b: 357.1, size: 12, font: 'camb', text: d.chassis },
-    // row 3 right — prices
-    { x: 295.3, b: 254.1, size: 11.05, font: 'cal', text: 'SELLING PRICE' },
-    { x: 459.5, b: 254.1, size: 11.05, font: 'cal', text: d.price },
-    { x: 295.3, b: 268.9, size: 11.05, font: 'cal', text: 'ADVANCE PAYMENT' },
-    { x: 459.5, b: 268.9, size: 11.05, font: 'cal', text: d.down },
-    { x: 295.3, b: 302.2, size: 11.05, font: 'cal', text: 'BALANCE AMOUNT' },
-    { x: 459.1, b: 302.2, size: 11.05, font: 'calb', text: d.balance },
-    { x: 461.7, b: 328.1, size: 11.05, font: 'calb', text: 'RMV CHARGES FREE', center: true },
-    // row 4 left
-    { x: 37.9, b: 376.5, size: 12, font: 'cal', text: 'BRAND NEW\u2019 DIESEL THREE WHEELER' },
-    { x: 40.4, b: 392, size: 11.05, font: 'cal', text: '12V Self-start, four stroke, Air cooled Diesel engine.' },
-    { x: 37.9, b: 405.5, size: 11.05, font: 'cal', text: '435CC 8h.p.' },
-    { x: 37.9, b: 421.4, size: 12, font: 'cal', text: 'Warranty :' },
-    { x: 106.4, b: 421.4, size: 12, font: 'cal', text: '18 months or 25,000kms which ever' },
-    { x: 37.9, b: 436.5, size: 12, font: 'cal', text: 'come first on Engine & Gear Box' },
-    { x: 37.9, b: 453.4, size: 12, font: 'cal', text: 'Services' },
-    { x: 88.4, b: 453.4, size: 12, font: 'cal', text: ':' },
-    { x: 102.4, b: 453.4, size: 12, font: 'cal', text: '1 full free services will be provided' },
-    // row 4 right — remarks
-    { x: 290, b: 376.3, size: 12, font: 'cal', text: 'REMARKS:' },
-    { x: 301.3, b: 392.6, size: 11.05, font: 'cal', text: 'Please note that the above price offered is on prevailing' },
-    { x: 295.3, b: 409.5, size: 11.05, font: 'cal', text: 'rates of exchange, import duties other Government levies' },
-    { x: 295.3, b: 426.3, size: 11.05, font: 'cal', text: '& any variations to the above will be adjusted in the final' },
-    { x: 295.3, b: 443.5, size: 11.05, font: 'cal', text: 'invoice.' },
-    // row 5 — VAT / dealer
-    { x: 161.1, b: 478.5, size: 12, font: 'cal', text: 'VAT REG. NO. 124008026-7000', center: true },
-    { x: 290, b: 477.1, size: 11.05, font: 'times', text: 'DEALER - GUNAWARDHANA MOTORS' },
-    // terms
-    { x: 30.4, b: 494.6, size: 11.05, font: 'calb', text: 'VALIDITY \u2013 14 DAYS' },
-    { x: 32, b: 517, size: 11.05, font: 'cal', text: 'PAYMENT TERMS:  All payments should be made in favor of \u2018SINGER (SRI' },
-    { x: 32, b: 531.5, size: 11.05, font: 'cal', text: 'LANKA) PLC, 112, Havelock Rd, Colombo 05, Sri Lanka.' },
-    { x: 31.6, b: 554.1, size: 11.05, font: 'cal', text: 'DELIVERY \u2013 Within 14 30 DAYS' },
-    { x: 48.8, b: 568.9, size: 9.95, font: 'cal', text: '1.' },
-    { x: 58.4, b: 569, size: 11.05, font: 'cal', text: 'Prices & Specifications subject to change without prior notice.' },
-    { x: 48.8, b: 584.2, size: 11.05, font: 'cal', text: '2.Goods being quoted are subject to prior sales and will only be issued if available at time of receiving your' },
-    { x: 48.8, b: 598, size: 11.05, font: 'cal', text: 'confirmed order.' },
-    { x: 48.8, b: 613.3, size: 9.95, font: 'cal', text: '2.' },
-    { x: 58.4, b: 613.3, size: 11.05, font: 'cal', text: 'Model of the vehicle has to be mentioned clearly on your purchase order.' },
-    { x: 48.8, b: 628.5, size: 9.95, font: 'cal', text: '3.' },
-    { x: 58.4, b: 628.5, size: 11.05, font: 'cal', text: 'Seller shall not be responsible for non-fulfillment or delayed performance of all or part of the order due,' },
-    { x: 58.6, b: 642.2, size: 11.05, font: 'cal', text: 'directly or indirectly to Act of good, Government order or restriction, war, threat of war, warlike conditions' },
-    { x: 58.6, b: 655.9, size: 11.05, font: 'cal', text: 'and hostilities' },
-    // signature block
-    { x: 48.8, b: 733.4, size: 9, font: 'calb', text: 'For ,' },
-    { x: 75.5, b: 733.4, size: 12, font: 'calb', text: d.signatory },
-    { x: 75, b: 749.1, size: 11.05, font: 'calb', text: 'Admin Executive' },
-  ];
-
   const parts: string[] = [];
-  T.forEach((el, i) => {
-    const A = ASC_EL[i] ?? ASC_FONT[el.font];
-    const top = el.b - A * el.size;
-    const centerStyle = el.center ? ';transform:translateX(-50%)' : '';
-    const extra = el.font === 'tah' && el.text === 'SINGER' ? ';letter-spacing:4.25pt;color:#FF0000' : '';
-    parts.push(
-      `<div class="t ${CLASS[el.font]}" style="left:${el.x}pt;top:${top.toFixed(4)}pt;font-size:${el.size}pt${centerStyle}${extra}">${esc(el.text)}</div>`,
-    );
-  });
-  // table borders (0.8pt strokes centred on the coordinates)
-  for (const y of [89.45, 107.04, 216.89, 364.49, 466.49, 483.84]) {
-    parts.push(`<div class="b" style="left:32.3pt;top:${(y - 0.4).toFixed(3)}pt;width:553.15pt;height:0.8pt"></div>`);
-  }
-  for (const x of [32.3, 289.85, 585.45]) {
-    parts.push(`<div class="b" style="left:${(x - 0.4).toFixed(3)}pt;top:89.45pt;width:0.8pt;height:394.39pt"></div>`);
-  }
-  parts.push(`<img class="img" src="${assetDataUrl('proforma_signature.png')}" style="left:51.72pt;top:668.16pt;width:76.08pt;height:51.96pt">`);
-  parts.push(`<img class="img" src="${assetDataUrl('proforma_footer.png')}" style="left:151.32pt;top:754.2pt;width:253.8pt;height:24.72pt">`);
+
+  // wordmark — v:group of 12 vector shapes, page-anchored (see proforma.wordmark.ts)
+  parts.push(
+    `<img class="wm" src="${wordmarkInline()}" style="left:433.2pt;top:21.45pt;width:154.45pt;height:24.6pt">`,
+  );
+
+  const flow: string[] = [];
+
+  // p0 (empty, anchors the wordmark) + p1 (title) — both sz=32, line 276
+  flow.push(para('', { size: 16, line: 276, after: 4, jc: 'center' }));
+  flow.push(para(run('PROFORMA INVOICE', 16), { size: 16, line: 276, after: 4, jc: 'center' }));
+
+  // ---------------------------------------------------------------- grid
+  const rows: string[] = [];
+
+  // row 0 — 14pt, line 276
+  rows.push(
+    tr(15.1,
+      td(para(run(`Proforma Invoice. No.  ${d.invoiceNo}`, 14), { size: 14, line: 276 }), COL0) +
+      td(para(run(`DATE:         ${d.date}       `, 14), { size: 14, line: 276 }), COL1)),
+  );
+
+  // row 1 left — Normal 10pt, after 32; right — after 35, inheriting Normal's
+  // ind left=355 twips, so it sits 17.75pt in while the left cell is flush.
+  const r1l = [
+    para('', { after: 32 }),
+    para(run(`Customer Name     - ${d.customer} `), { after: 32 }),
+    para('', { after: 32 }),
+    para(run(`Customer NIC- ${d.nic}`), { after: 32 }),
+    para('', { after: 32 }),
+    para(run(`Contact no     - ${d.contact}`), { after: 32 }),
+  ].join('');
+  const r1r = [
+    para(run(`Leasing company- ${d.financeCompany} `), { after: 35, left: 355 }),
+    para('', { after: 35, left: 355 }),
+    para(run(`Address- ${d.financeAddress} `), { after: 35, left: 355 }),
+    para(run('     '), { after: 35, left: 355 }),
+    para('', { after: 0, left: 355 }),
+    para('', { after: 2, left: 355 }),
+    para(run('            '), { after: 2, line: 240 }),
+  ].join('');
+  rows.push(tr(81.85, td(r1l, COL0) + td(r1r, COL1)));
+
+  // row 2 — merged into row 3 below it (bottom border nil)
+  rows.push(
+    tr(11.65,
+      td(para(run(' DESCRIPTION  ', 14), { size: 14, line: 276 }), COL0, 'nb') +
+      td(para(run(' ', 12), { size: 12, line: 276 }), COL1, 'nb')),
+  );
+
+  // row 3 left — 11pt spec block; chassis value is 16pt subscript on the docx.
+  // line spacing is computed from the LARGEST run on the line, so these
+  // paragraphs are declared at 11pt even though Normal is 10pt.
+  const r3l = [
+    para(run(`MAKE                      - ${d.make}`, 11), { size: 11, after: 0 }),
+    para(run(`MODEL                    - ${d.model}`, 11), { size: 11, after: 0 }),
+    para(run(`TYPE                       - ${d.type}`, 11), { size: 11, after: 0 }),
+    para(run(`COLOUR                  - ${d.color}`, 11), { size: 11, after: 32 }),
+    para(run(`EN/MOTOR NO       - ${d.engine}`, 11), { size: 11, after: 32 }),
+    para('', { size: 11, after: 32 }),
+    para(
+      run('CHASSIS NO', 11) + run('        ', 16, false, true) + run(' -', 16, false, true) + run(d.chassis, 16, false, true),
+      { size: 11, after: 33 },
+    ),
+    para(run(`YOM                      - ${d.yom}`, 11), { size: 11, after: 33 }),
+    para('', { size: 11, after: 33 }),
+  ].join('');
+  const r3r = [
+    para('', { line: 246 }),
+    para(run(`Selling price         - LKR ${d.price}/-`), { line: 246 }),
+    para(run(`Cash Advance      -LKR ${d.down}/-`), { line: 246 }),
+    para(run(`Balance Amount -LKR ${d.balance}/-`), { line: 246 }),
+  ].join('');
+  rows.push(tr(93.15, td(r3l, COL0, 'nt') + td(r3r, COL1, 'nt')));
+
+  // row 4 — merged into row 5 below it (bottom border nil)
+  rows.push(
+    tr(7.15,
+      td(para(run('  ', 14), { size: 14, line: 276 }), COL0, 'nb') +
+      td(para(run(' ', 14), { size: 14, line: 276 }), COL1, 'nb')),
+  );
+
+  // row 5 left — merged into row 4 above (top border nil); right — REMARKS
+  rows.push(
+    tr(63.45,
+      td(para('', { after: 32 }) + para('', { after: 36, line: 248 }), COL0, 'nt') +
+      td(
+        para(run('REMARKS:  '), { after: 36 }) +
+          para(run(d.remarks), { line: 276, firstLine: 120, jc: 'both' }),
+        COL1,
+        'nt',
+      )),
+  );
+
+  // row 6
+  rows.push(
+    tr(15.1,
+      td(para(run(`                 VAT REG. NO. ${d.vatNo} `, 14), { size: 14, line: 276 }), COL0) +
+      td(para(run(' ', 14), { size: 14, line: 276 }), COL1)),
+  );
+
+  flow.push(`<table class="g">${rows.join('')}</table>`);
+
+  // ------------------------------------------------------------- terms
+  // Body paragraphs inherit Normal (after=30 twips, line=246), not the
+  // TableGrid spacing the cells use.
+  flow.push(para(run(' ', 9), { size: 9, line: 240, after: 31 }));
+  flow.push(para(run('VALIDITY \u2013 07 DAYS    ', 11, true), { size: 11, line: 246, after: 30, left: 10, bold: true }));
+  flow.push(
+    para(
+      run('PAYMENT TERMS:  All payments should be made in favor of \u2018SINGER (SRI LANKA) PLC, ', 11) +
+        run('112, Havelock Rd, Colombo 06, Sri Lanka. ', 12),
+      { size: 12, line: 259, after: 30, left: 10, right: 3610 },
+    ),
+  );
+  flow.push(
+    para(
+      run('DELIVERY \u2013 ', 12) + run('Within ', 11) + run('14 ', 12) + run('30 ', 11) + run('DAYS ', 12),
+      { size: 12, line: 240, after: 32, left: 10 },
+    ),
+  );
+
+  // numId=1 -> abstractNum 0 -> decimal "%1.", no hanging indent
+  const terms = [
+    run('Prices & Specifications subject to change without prior notice. '),
+    run('RMV free of Charge', 10, true),
+    run('Goods being quoted are subject to prior sales and will only be issued if available at time of receiving your confirmed order. '),
+    run('Model of the vehicle has to be mentioned clearly on your purchase order.   '),
+    run('Seller shall not be responsible for non-fulfillment or delayed performance of all or part of the order due, directly or indirectly to Act of good, Government order or restriction, war, threat of war, warlike conditions and hostilities.  '),
+  ];
+  terms.forEach((t, i) => flow.push(num(i + 1, t, i === 1)));
+
+  flow.push(para('', { line: 246, after: 30, left: 10 }));
+  flow.push(para('', { line: 246, after: 30, left: 0 }));
+  flow.push(para(run('-------------------------'), { line: 246, after: 30, left: 0 }));
+  flow.push(para(run('Authorized dealer                              '), { line: 246, after: 30, left: 0 }));
+
+  // letterhead — anchored to this paragraph, H relativeFrom=page 112.5pt,
+  // V relativeFrom=paragraph +11.8pt, shown at 323.25x36pt
+  flow.push(
+    `<div style="position:relative"><img class="lh" src="${assetDataUrl('proforma_letterhead.jpeg')}" style="left:40.5pt;top:11.8pt;width:323.25pt;height:36pt"></div>`,
+  );
+
+  parts.push(`<div class="flow">${flow.join('')}</div>`);
 
   const tpl = fs.readFileSync(path.join(import.meta.dir, '..', 'proforma.template.html'), 'utf8');
   return tpl.replace('{{BODY}}', parts.join('\n'));
+}
+
+let cachedWordmark = '';
+function wordmarkInline(): string {
+  if (!cachedWordmark) {
+    // bake to a self-contained data URL so the img is layout-independent
+    cachedWordmark = `data:image/svg+xml;base64,${Buffer.from(wordmarkSvg(), 'utf8').toString('base64')}`;
+  }
+  return cachedWordmark;
 }

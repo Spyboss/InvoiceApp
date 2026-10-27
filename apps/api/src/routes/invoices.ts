@@ -3,8 +3,12 @@ import { desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { customers, invoices, vehicles, type Db, type Invoice } from '@erp/db';
 import type { Customer, Vehicle } from '@erp/db';
-import { DEALER, DEFAULT_SIGNATORY, invoiceCreateSchema } from '@erp/shared';
-import { buildProformaHtml, buildSalesHtml, renderPdf, type ProformaData, type SalesData } from '@erp/pdf';
+import { DEALER, invoiceCreateSchema } from '@erp/shared';
+import {
+  buildProformaHtml, buildSalesHtml, renderPdf,
+  PROFORMA_REMARKS, PROFORMA_VAT_NO,
+  type ProformaData, type SalesData,
+} from '@erp/pdf';
 import { audit } from '../audit';
 import { requireAuth } from '../auth';
 import { fromCents, toCents } from '../money';
@@ -14,30 +18,34 @@ type InvoiceWithRefs = Invoice & { customer: Customer; vehicle: Vehicle | null }
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
-/** Proforma document data — mirrors generate_proforma_pdf() in web_app.py. */
+/** Proforma document data — Singer (SRI LANKA) PLC. format, see @erp/pdf. */
 function proformaData(inv: InvoiceWithRefs): ProformaData {
   const v = inv.vehicle;
-  const spaced = (s: string) => s.split('').join(' ');
   const d = new Date(inv.date);
+  const day = (n: number) => String(n).padStart(2, '0');
+  // the format prints prices ungrouped, e.g. "LKR 980000/-" — no separators
+  const money = (x: string) => String(Number(x));
   return {
-    invoiceNo: spaced(inv.invoiceNo),
-    date: `${String(d.getDate()).padStart(2, '0')} /${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`,
+    invoiceNo: inv.invoiceNo,
+    date: `${day(d.getDate())}/${day(d.getMonth() + 1)}/${d.getFullYear()}`,
     customer: inv.customer.name.toUpperCase(),
-    custAddr: inv.customer.address ?? '',
     nic: inv.customer.nic ?? '',
+    contact: inv.customer.phone ?? '',
     financeCompany: inv.financeCompany ?? '',
     financeAddress: inv.financeAddress ?? '',
     // snapshot first, stock vehicle fallback (pre-snapshot rows)
+    make: inv.make ?? v?.make ?? '',
     model: inv.model ?? v?.model ?? '',
     type: inv.vehicleType ?? v?.type ?? '',
     color: inv.color ?? v?.color ?? '',
     yom: inv.yom != null ? String(inv.yom) : v ? String(v.yom) : '',
     engine: inv.engineNo ?? v?.engineNo ?? '',
     chassis: inv.chassisNo ?? v?.chassisNo ?? '',
-    price: `RS.${Number(inv.price).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
-    down: `RS.${Number(inv.down).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
-    balance: `RS .${Number(inv.balance).toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
-    signatory: inv.signatory ?? DEFAULT_SIGNATORY,
+    price: money(inv.price),
+    down: money(inv.down),
+    balance: money(inv.balance),
+    vatNo: PROFORMA_VAT_NO,
+    remarks: PROFORMA_REMARKS,
   };
 }
 
@@ -45,7 +53,7 @@ function proformaData(inv: InvoiceWithRefs): ProformaData {
 function salesData(inv: InvoiceWithRefs): SalesData {
   const v = inv.vehicle;
   return {
-    invoiceNo: inv.invoiceNo,                       // printed raw (unlike proforma's spaced style)
+    invoiceNo: inv.invoiceNo,
     date: iso(new Date(inv.date)),
     dealer: inv.dealer ?? DEALER,
     customer: inv.customer.name,
@@ -110,6 +118,7 @@ export function invoiceRoutes(db: Db): Hono {
       row = await (db as any).transaction(async (tx: any) => {
         // snapshot: authoritative values come from the stock vehicle when attached
         let snapshot = {
+          make: input.make ?? null,
           model: input.model ?? null,
           engineNo: input.engineNo ?? null,
           chassisNo: input.chassisNo ?? null,
@@ -127,6 +136,7 @@ export function invoiceRoutes(db: Db): Hono {
           if (!v) throw new Error('unknown vehicle');
           if (v.status !== 'AVAILABLE') throw new Error(`vehicle not available (status ${v.status})`);
           snapshot = {
+            make: v.make,
             model: v.model, engineNo: v.engineNo, chassisNo: v.chassisNo,
             color: v.color, vehicleType: v.type, yom: v.yom,
           };

@@ -14,7 +14,8 @@ apps/
 packages/
   shared/    zod schemas + constants shared by api & web
   db/        Drizzle schema (full DMS: 12 tables) + migrations (Postgres; PGlite for dev/test)
-  pdf/       HTML → headless Chromium PDF pipeline (pixel-matched proforma)
+  pdf/       HTML -> headless Chromium PDF pipeline (sales pixel-matched to the
+             ReportLab originals; proforma rebuilt to the Singer BIBILE docx format)
 ```
 
 ### Run it (development)

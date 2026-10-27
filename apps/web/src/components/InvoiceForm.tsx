@@ -20,8 +20,10 @@ const invoiceSchema = z
     dealer: z.string().min(1, 'Dealer name is required'),
     customer_name: z.string().min(2, 'Customer name is required'),
     nic: z.string().optional(),
+    phone: z.string().optional(),
     cust_addr: z.string().optional(),
     vehicle_id: z.string(),
+    make: z.string().optional(),
     model: z.string().optional(),
     vehicle_type: z.string().optional(),
     engine: z.string().optional(),
@@ -93,7 +95,7 @@ export function InvoiceForm() {
       const match = customers.find((c) => c.name.trim().toLowerCase() === name.toLowerCase())
       const customer =
         match ??
-        (await api.createCustomer({ name, nic: values.nic, address: values.cust_addr })).customer
+        (await api.createCustomer({ name, nic: values.nic, phone: values.phone, address: values.cust_addr })).customer
 
       // 2. build payload — stock link OR manual snapshot
       const payload: InvoiceCreateInput = {
@@ -106,6 +108,7 @@ export function InvoiceForm() {
         ...(selected
           ? { vehicleId: selected.id }
           : {
+              make: values.make,
               model: values.model,
               vehicleType: values.vehicle_type,
               engineNo: values.engine,
@@ -124,7 +127,7 @@ export function InvoiceForm() {
       const { blob, filename } = await api.invoicePdf(invoice.id)
       downloadBlob(blob, filename)
       setDone(`Invoice ${invoice.invoiceNo} created — PDF downloaded.`)
-      reset({ customer_name: '', nic: '', cust_addr: '', model: '', engine: '', chassis: '', color: '', delivery: '' })
+      reset({ customer_name: '', nic: '', phone: '', cust_addr: '', make: '', model: '', engine: '', chassis: '', color: '', delivery: '' })
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Connection failed')
     } finally {
@@ -194,6 +197,10 @@ export function InvoiceForm() {
               <Label htmlFor="nic">Customer NIC</Label>
               <Input {...register('nic')} />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone">Contact No</Label>
+              <Input {...register('phone')} placeholder="07XXXXXXXX" />
+            </div>
             <div className="space-y-2 md:col-span-2">
               <Label htmlFor="cust_addr">Customer Address</Label>
               <Textarea {...register('cust_addr')} />
@@ -229,7 +236,11 @@ export function InvoiceForm() {
               <div><span className="text-slate-500 block">YOM</span>{selected.yom}</div>
             </div>
           ) : (
-            <div className="border-t pt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="border-t pt-4 grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="make">Make</Label>
+                <Input {...register('make')} placeholder="TAILG" />
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="model">Model</Label>
                 <Input {...register('model')} placeholder="APE Classic DX" />

@@ -98,6 +98,7 @@ export interface InvoiceCreateInput {
   date: string;
   customerId: string;
   vehicleId?: string;
+  make?: string;
   model?: string;
   engineNo?: string;
   chassisNo?: string;

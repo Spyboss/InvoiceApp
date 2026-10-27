@@ -1,4 +1,9 @@
-export { buildProformaHtml, type ProformaData } from './proforma';
+export {
+  buildProformaHtml,
+  PROFORMA_VAT_NO,
+  PROFORMA_REMARKS,
+  type ProformaData,
+} from './proforma';
 export { buildSalesHtml, type SalesData } from './sales';
 export {
   buildSalesReportHtml,

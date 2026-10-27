@@ -4,7 +4,7 @@
   "main": "src/index.ts",
   "scripts": {
     "test": "echo no tests in @erp/pdf - parity gate: scripts/calibrate_sales.ts",
-    "calibrate": "bun run reference-render.mjs"
+    "calibrate:sales": "bun run scripts/calibrate_sales.ts"
   },
   "devDependencies": {
     "@napi-rs/canvas": "^0.1.65",
