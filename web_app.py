@@ -5,9 +5,8 @@ import requests
 from datetime import datetime
 
 import streamlit as st
-from reportlab.lib.pagesizes import A4, letter
+from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
-from reportlab.pdfgen import canvas
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer,
     Table, TableStyle, Image, KeepTogether, Frame, PageTemplate
@@ -261,169 +260,363 @@ def generate_sales_pdf(data):
 
 def generate_proforma_pdf(data):
     buf = BytesIO()
-    c = canvas.Canvas(
-        buf, pagesize=letter,
-        title="Proforma Invoice - Gunawardhana Enterprises, Tangalle",
-        author="Software solution by UHADEV - uhadev.com",
-        subject="Piaggio vehicle proforma invoice",
-        keywords="proforma, invoice, piaggio, vehicle, tangalle, uhadev",
+    
+    styles = getSampleStyleSheet()
+    small = ParagraphStyle("small", parent=styles["Normal"], fontSize=9, leading=11)
+    title_style = ParagraphStyle("title", alignment=1, fontSize=16, fontName="Helvetica-Bold")
+
+    def header_footer(canvas, doc):
+        canvas.saveState()
+        try:
+            if os.path.exists(LOGO_PATH):
+                canvas.drawImage(LOGO_PATH, 25, 790, width=50, height=50, preserveAspectRatio=True)
+        except Exception:
+            pass
+        dealer_name = str(data.get("dealer", "")).split(",")[0].strip() or "Dealer"
+        dealer_addr = ",".join(str(data.get("dealer", "")).split(",")[1:]).strip()
+        canvas.setFont("Helvetica-Bold", 12); canvas.setFillColor(colors.HexColor("#0B3D91"))
+        canvas.drawString(80, 820, dealer_name)
+        canvas.setFont("Helvetica", 9); canvas.setFillColor(colors.grey)
+        canvas.drawString(80, 805, "Authorized Dealer")
+        if dealer_addr:
+            canvas.setFont("Helvetica", 9); canvas.setFillColor(colors.black)
+            canvas.drawString(80, 792, dealer_addr)
+        try:
+            if os.path.exists(SINGER_LOGO_PATH):
+                canvas.drawImage(SINGER_LOGO_PATH, 440, 805, width=120, height=35, preserveAspectRatio=True)
+        except Exception:
+            pass
+        canvas.setFont("Helvetica-Bold", 9)
+        canvas.drawCentredString(300, 45, dealer_name)
+        if dealer_addr:
+            canvas.setFont("Helvetica", 9)
+            canvas.drawCentredString(300, 32, dealer_addr)
+        canvas.setFont("Helvetica", 9)
+        canvas.drawCentredString(300, 20, "Contact: 0778525428 / 0768525428 | Email: gunawardhanaenttangalle@gmail.com")
+        canvas.setFont("Helvetica", 7)
+        canvas.setFillColor(colors.lightgrey)
+        canvas.drawCentredString(300, 10, "Software solution by UHADEV \u2014 uhadev.com")
+        canvas.restoreState()
+
+    doc = SimpleDocTemplate(buf, pagesize=A4, rightMargin=25, leftMargin=25, topMargin=40, bottomMargin=30,
+                            title="Proforma Invoice - Gunawardhana Enterprise, Tangalle",
+                            author="Software solution by UHADEV - uhadev.com",
+                            subject="Piaggio vehicle proforma invoice",
+                            keywords="proforma, invoice, piaggio, vehicle, tangalle, uhadev")
+    frame = Frame(25, 90, 545, 680, id="content")
+    doc.addPageTemplates([PageTemplate(id="main", frames=frame, onPage=header_footer)])
+
+    story = []
+    story.append(Spacer(1, 40))
+    story.append(Paragraph("PROFORMA INVOICE", title_style))
+    story.append(Spacer(1, 15))
+
+    top_col_widths = [190, 120, 80, 155]
+    recipient_block = (
+        f"TO : THE MANAGER\n{data['finance_company']}\n{data['finance_address']}\n\n"+
+        f"Customer: {data['customer']}\nAddress: {data['cust_addr']}\nNIC: {data['nic']}"
     )
-    W, H = letter  # 612 x 792
+    top_data = [
+        ["Proforma Invoice No.", data["invoice_no"], "DATE:", data["date"]],
+        [
+            "MANUFACTURER: INDIA\nPIAGGIO VEHICLES PVT LTD\nPUNE, MAHARASHTRA",
+            "",
+            recipient_block,
+            ""
+        ]
+    ]
+    top_table = Table(top_data, colWidths=top_col_widths)
+    top_table.setStyle(TableStyle([
+        ("SPAN", (0,1), (1,1)),
+        ("SPAN", (2,1), (3,1)),
+        ("BOX", (0,0), (-1,-1), 1, colors.black),
+        ("INNERGRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("VALIGN", (0,0), (-1,-1), "TOP"),
+        ("FONTSIZE", (0,0), (-1,-1), 9),
+    ]))
+    story.append(top_table)
+    story.append(Spacer(1, 8))
 
-    # Register the exact fonts used in the sample layout
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
-    _F = lambda p: os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", p)
-    pdfmetrics.registerFont(TTFont("Calibri", _F("calibri.ttf")))
-    pdfmetrics.registerFont(TTFont("Calibri-Bold", _F("calibrib.ttf")))
-    pdfmetrics.registerFont(TTFont("Cambria-Bold", _F("cambriab.ttf")))
-    pdfmetrics.registerFont(TTFont("Tahoma-Bold", _F("tahomabd.ttf")))
-    pdfmetrics.registerFont(TTFont("TimesNewRoman", _F("times.ttf")))
+    desc_table = Table([
+        ["DESCRIPTION", "", "SELLING PRICE", f"{data['price']:,.2f}"],
+        ["MAKE", "PIAGGIO", "LEASE AMOUNT", f"{data['down']:,.2f}"],
+        ["MODEL", data["model"], "", ""],
+        ["COLOUR", data["color"], "", ""],
+        ["ENGINE NO", data["engine"], "", ""],
+        ["CHASSIS NO", data["chassis"], "", ""]
+    ], colWidths=[150, 200, 100, 95])
+    desc_table.setStyle(TableStyle([
+        ("BOX", (0,0), (-1,-1), 1, colors.black),
+        ("INNERGRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("FONTSIZE", (0,0), (-1,-1), 9),
+        ("VALIGN", (0,0), (-1,-1), "TOP")
+    ]))
+    story.append(desc_table)
+    story.append(Spacer(1, 8))
 
-    def Y(y_top):
-        return H - y_top
+    info_table = Table([[
+        Paragraph("""
+BRAND NEW DIESEL THREE WHEELER<br/>
+12V Self-start, four stroke, air cooled diesel engine<br/>
+435CC 8h.p.<br/>
+Warranty : 18 months or 25,000kms whichever comes first<br/>
+Services : 3 labor-free services will be provided
+""", small),
+        Paragraph("""
+REMARKS:<br/>
+Please note that the above price offered is based on the prevailing
+rates of exchange, import duties, other Government levies and
+any variations to the above will be adjusted in the final invoice.
+""", small)
+    ]], colWidths=[270, 275])
+    info_table.setStyle(TableStyle([
+        ("BOX", (0,0), (-1,-1), 1, colors.black),
+        ("INNERGRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("VALIGN", (0,0), (-1,-1), "TOP"),
+    ]))
+    story.append(info_table)
+    story.append(Spacer(1, 10))
 
-    def text(x, y_top, s, font="Calibri", size=11.05, color=None):
-        c.setFont(font, size)
-        c.setFillColor(color or colors.black)
-        c.drawString(x, Y(y_top), s)
+    story.append(Paragraph("""
+<b>VALIDITY – 07 DAYS</b><br/>
+PAYMENT TERMS: All payments should be made in favor of the finance company per instructions.<br/><br/>
 
-    def ctext(cx, y_top, s, font="Calibri", size=11.05, color=None):
-        c.setFont(font, size)
-        c.setFillColor(color or colors.black)
-        c.drawCentredString(cx, Y(y_top), s)
+<b>DELIVERY – Within 14 to 30 DAYS</b><br/>
+1. Prices & Specifications subject to change without prior notice.<br/>
+2. Goods being quoted are subject to availability at time of confirmed order.<br/>
+3. Model of the vehicle must be mentioned clearly on your purchase order.<br/>
+4. Seller is not responsible for delays due to government regulations or force majeure.
+""", small))
+    story.append(Spacer(1, 90))
+    story.append(Paragraph(".......................................................<br/>Authorized Signatory", small))
 
-    def rtext(rx, y_top, s, font="Calibri", size=11.05, color=None):
-        c.setFont(font, size)
-        c.setFillColor(color or colors.black)
-        c.drawRightString(rx, Y(y_top), s)
+    doc.build(story)
+    return buf.getvalue()
 
-    try:
-        date_str = datetime.strptime(str(data.get("date", "")), "%Y-%m-%d").strftime("%d /%m/%Y")
-    except Exception:
-        date_str = str(data.get("date", ""))
 
-    inv_spaced = "S P G O " + " ".join(str(data.get("invoice_no", "")))
+def generate_advance_pdf(data):
+    buf = BytesIO()
+    
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+                            topMargin=45, bottomMargin=35,
+                            leftMargin=40, rightMargin=40,
+                            title="Advance Invoice - Gunawardhana Enterprise, Tangalle",
+                            author="Software solution by UHADEV - uhadev.com",
+                            subject="Piaggio vehicle advance invoice",
+                            keywords="advance, invoice, piaggio, vehicle, tangalle, uhadev")
+    styles = getSampleStyleSheet()
+    elements = []
 
-    # ---- Header ----
-    c.saveState()
-    c.setFont("Tahoma-Bold", 28)
-    c.setFillColor(colors.HexColor("#FF0000"))
-    c._code.append("%g Tc" % 4.25)
-    c.drawString(448.1, Y(59), "SINGER")
-    c.restoreState()
-    title_w = pdfmetrics.stringWidth("PROFORMA INVOICE", "Calibri", 14.05)
-    ctext(227.4 + title_w / 2, 82.9, "PROFORMA INVOICE", "Calibri", 14.05)
+    logo = get_logo()
+    if logo:
+        logo.hAlign = "LEFT"
+        elements.append(logo)
+        elements.append(Spacer(1, 6))
+        small_style = ParagraphStyle(
+            'smallGray',
+            fontSize=9,
+            textColor=colors.gray,
+            leftIndent=3,
+            spaceAfter=10,
+            leading=9
+        )
+        elements.append(Paragraph("Authorized Dealer", small_style))
 
-    # ---- Table borders ----
-    c.setStrokeColor(colors.black)
-    c.setLineWidth(0.8)
-    left, mid, right = 32.3, 289.85, 585.45
-    tops = [89.45, 107.04, 216.89, 364.49, 466.49, 483.84]
-    for yt in tops:
-        c.line(left, Y(yt), right, Y(yt))
-    c.line(left, Y(tops[0]), left, Y(tops[-1]))
-    c.line(mid, Y(tops[0]), mid, Y(tops[-1]))
-    c.line(right, Y(tops[0]), right, Y(tops[-1]))
+    title = Paragraph("<b><font size=\"15\">ADVANCE PAYMENT RECEIPT</font></b>", styles["Title"])
+    subtitle = Paragraph(
+        f"<para align='center'><font size=\"10\">{data['dealer']}</font></para>",
+        styles["Normal"]
+    )
 
-    # ---- Row 1 ----
-    text(37.9, 101.6, f"Proforma Invoice. No.  {inv_spaced}", size=12)
-    text(295.3, 101.6, f"DATE: {date_str}", size=12)
+    bill_line = Paragraph(
+        f"<para align='center'><b>Receipt No: {data['invoice_no']}</b></para>",
+        styles["Normal"]
+    )
 
-    # ---- Row 2 : left ----
-    text(37.9, 118, "MANUFACTURER: INDIA")
-    text(37.9, 133, "PIAGGIO VEHICLES PVT LTD")
-    text(37.9, 155.9, "VIMAN NAGAR")
-    text(37.9, 172, "PUNE 411032,")
-    text(37.9, 186.9, "MAHARASHTRA")
-    text(37.9, 206.1, "INDIA")
+    elements += [title, Spacer(1, 6), subtitle, Spacer(1, 20)]
 
-    # ---- Row 2 : right ----
-    text(295.4, 117.8, "TO : THE MANAGER", size=12)
-    text(322.6, 131, str(data.get("finance_company", "")).upper(), size=12)
-    text(322.6, 144, str(data.get("finance_address", "")).upper(), size=12)
-    text(292.6, 170.5, f"O/A - {str(data.get('customer', '')).upper()}")
-    text(301.1, 188.2, str(data.get("cust_addr", "")).upper())
-    text(306, 206.5, f"ID -{data.get('nic', '')}")
+    header = [
+        ["", "", "Date:", data["date"]],
+        ["", "", "Receipt No:", data["invoice_no"]],
+        ["Customer Name:", data["customer"], "", ""],
+        ["Address:", data["cust_addr"], "", ""],
+        ["NIC:", data["nic"], "", ""],
+    ]
+    t = Table(header, colWidths=[95, 250, 70, 90])
+    t.setStyle(TableStyle([
+        ("FONTNAME", (0,0), (-1,-1), "Helvetica-Bold")
+    ]))
+    elements += [t, Spacer(1, 20)]
 
-    # ---- Row 3 : left (description) ----
-    text(40.7, 228.8, "DESCRIPTION", size=12)
-    text(37.9, 254.1, "MAKE");      text(109, 254.1, "PIAGGIO")
-    text(37.9, 267.4, "MODEL");     text(109, 268.5, str(data.get("model", "")).upper(), size=12)
-    text(37.9, 289.3, "TYPE");      text(109, 291.3, str(data.get("type", "")).upper())
-    text(37.9, 302.2, "COLOUR");    text(109, 306.2, str(data.get("color", "")).upper())
-    text(37.9, 319.7, "YOM");       text(109, 321.2, str(data.get("yom", "")))
-    text(37.9, 337.1, "ENGINE NO"); text(111.2, 337.7, str(data.get("engine", "")), "Cambria-Bold", 12)
-    text(37.9, 354.8, "CHASSIS NO");text(113.5, 357.1, str(data.get("chassis", "")), "Cambria-Bold", 12)
+    v = [
+        ["Model", data["model"]],
+        ["Engine No", data["engine"]],
+        ["Chassis No", data["chassis"]],
+        ["Color", data["color"]],
+    ]
+    vt = Table(v, colWidths=[150, 250])
+    vt.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (0,-1), colors.whitesmoke),
+        ("GRID", (0,0), (-1,-1), 0.25, colors.gray),
+    ]))
+    elements += [
+        Paragraph("<b>Vehicle Details</b>", styles["Heading4"]),
+        Spacer(1, 8),
+        vt,
+        Spacer(1, 18)
+    ]
 
-    # ---- Row 3 : right ----
-    price = safe_float(data.get("price", 0))
-    down = safe_float(data.get("down", 0))
-    balance = safe_float(data.get("balance", 0))
-    text(295.3, 254.1, "SELLING PRICE")
-    text(459.5, 254.1, f"RS.{price:,.2f}")
-    text(295.3, 268.9, "ADVANCE PAYMENT")
-    text(459.5, 268.9, f"RS.{down:,.2f}")
-    text(295.3, 302.2, "BALANCE AMOUNT")
-    text(459.1, 302.2, f"RS .{balance:,.2f}", "Calibri-Bold", 11.05)
-    ctext(461.7, 328.1, "RMV CHARGES FREE", "Calibri-Bold", 11.05)
+    advance = data["down"]
+    balance = data["balance"]
+    payment_method = data.get("payment_method", "N/A")
 
-    # ---- Row 4 : left ----
-    text(37.9, 376.5, "BRAND NEW’ DIESEL THREE WHEELER", size=12)
-    text(40.4, 392, "12V Self-start, four stroke, Air cooled Diesel engine.")
-    text(37.9, 405.5, "435CC 8h.p.")
-    text(37.9, 421.4, "Warranty :", size=12)
-    text(106.4, 421.4, "18 months or 25,000kms which ever", size=12)
-    text(37.9, 436.5, "come first on Engine & Gear Box", size=12)
-    text(37.9, 453.4, "Services", size=12)
-    text(88.4, 453.4, ":", size=12)
-    text(102.4, 453.4, "1 full free services will be provided", size=12)
+    pay = [
+        ["Total Vehicle Price", f"Rs. {data['price']:,.2f}"],
+        ["Advance Payment Received", f"Rs. {advance:,.2f}"],
+        ["Payment Method", payment_method],
+        ["Balance to be Paid", f"Rs. {balance:,.2f}"],
+    ]
+    pt = Table(pay, colWidths=[200, 200])
+    pt.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (0,-1), colors.whitesmoke),
+        ("GRID", (0,0), (-1,-1), 0.25, colors.black),
+        ("FONTNAME", (0,0), (-1,-1), "Helvetica-Bold")
+    ]))
+    elements += [
+        Paragraph("<b>Payment Details</b>", styles["Heading4"]),
+        Spacer(1, 8),
+        pt,
+        Spacer(1, 18)
+    ]
 
-    # ---- Row 4 : right ----
-    text(290, 376.3, "REMARKS:", size=12)
-    text(301.3, 392.6, "Please note that the above price offered is on prevailing")
-    text(295.3, 409.5, "rates of exchange, import duties other Government levies")
-    text(295.3, 426.3, "& any variations to the above will be adjusted in the final")
-    text(295.3, 443.5, "invoice.")
+    elements.append(
+        Paragraph(
+            "<b>Remarks:</b><br/>This is an advance payment receipt for the reservation of the above vehicle. "
+            "The balance payment should be made as per the agreement.",
+            styles["Normal"]
+        )
+    )
+    elements.append(Spacer(1, 40))
 
-    # ---- Row 5 ----
-    ctext(161.1, 478.5, "VAT REG. NO. 124008026-7000", "Calibri", 12)
-    text(290, 477.1, "DEALER - GUNAWARDHANA MOTORS", "TimesNewRoman", 11.05)
+    elements.append(Spacer(1, 60))
+    sign = Table(
+        [
+            ["........................................", "........................................"],
+            ["Customer Signature", "Authorized Signature & Stamp"]
+        ],
+        colWidths=[240, 240],
+        hAlign="CENTER"
+    )
+    sign.setStyle(TableStyle([
+        ("ALIGN", (0,0), (-1,0), "CENTER"),
+        ("ALIGN", (0,1), (-1,1), "CENTER"),
+        ("FONTNAME", (0,1), (-1,1), "Helvetica-Bold")
+    ]))
+    elements += [KeepTogether(sign)]
+    elements.append(Spacer(1, 30))
+    elements.append(Paragraph("<para align='center'><b>Thank you for your business!</b></para>", styles["Normal"]))
 
-    # ---- Terms block ----
-    text(30.4, 494.6, "VALIDITY – 14 DAYS", "Calibri-Bold", 11.05)
-    text(32, 517, "PAYMENT TERMS:  All payments should be made in favor of ‘SINGER (SRI", size=11.05)
-    text(32, 531.5, "LANKA) PLC, 112, Havelock Rd, Colombo 05, Sri Lanka.", size=11.05)
-    text(31.6, 554.1, "DELIVERY – Within 14 30 DAYS", size=11.05)
+    def advance_footer(canvas, doc):
+        canvas.saveState()
+        x = doc.leftMargin + doc.width / 2.0
+        canvas.setFont("Helvetica", 9)
+        canvas.setFillColor(colors.gray)
+        canvas.drawCentredString(x, 25, "Contact: 0778525428 / 0768525428 | Email: gunawardhanaenttangalle@gmail.com")
+        canvas.setFont("Helvetica", 7)
+        canvas.setFillColor(colors.lightgrey)
+        canvas.drawCentredString(x, 15, "Software solution by UHADEV \u2014 uhadev.com")
+        canvas.restoreState()
 
-    text(48.8, 568.9, "1.", size=9.95)
-    text(58.4, 569, "Prices & Specifications subject to change without prior notice.", size=11.05)
-    text(48.8, 584.2, "2.Goods being quoted are subject to prior sales and will only be issued if available at time of receiving your", size=11.05)
-    text(48.8, 598, "confirmed order.", size=11.05)
-    text(48.8, 613.3, "2.", size=9.95)
-    text(58.4, 613.3, "Model of the vehicle has to be mentioned clearly on your purchase order.", size=11.05)
-    text(48.8, 628.5, "3.", size=9.95)
-    text(58.4, 628.5, "Seller shall not be responsible for non-fulfillment or delayed performance of all or part of the order due,", size=11.05)
-    text(58.6, 642.2, "directly or indirectly to Act of good, Government order or restriction, war, threat of war, warlike conditions", size=11.05)
-    text(58.6, 655.9, "and hostilities", size=11.05)
+    doc.build(elements, onFirstPage=advance_footer, onLaterPages=advance_footer)
+    return buf.getvalue()
+    doc = SimpleDocTemplate(buf, pagesize=A4, rightMargin=25, leftMargin=25, topMargin=40, bottomMargin=30)
+    frame = Frame(25, 90, 545, 680, id="content")
 
-    # ---- Signature ----
-    text(48.8, 733.4, "For ,", "Calibri-Bold", 9)
-    text(75.5, 733.4, str(data.get("signatory", "")), "Calibri-Bold", 12)
-    text(75, 749.1, "Admin Executive", "Calibri-Bold", 11.05)
+    story = []
+    story.append(Spacer(1, 40))
+    story.append(Paragraph("PROFORMA INVOICE", title_style))
+    story.append(Spacer(1, 15))
 
-    # ---- Signature image & footer stamp (extracted from the sample layout) ----
-    try:
-        c.drawImage(os.path.join(APP_DIR, "proforma_signature.png"), 51.72, 71.88, 76.08, 51.96)
-    except Exception:
-        pass
-    try:
-        c.drawImage(os.path.join(APP_DIR, "proforma_footer.png"), 151.32, 13.08, 253.8, 24.72)
-    except Exception:
-        ctext(306, 753, "SINGER (SRI LANKA) PLC.", "TimesNewRoman", 11, colors.HexColor("#9E4A63"))
+    top_col_widths = [190, 120, 80, 155]
+    recipient_block = (
+        f"TO : THE MANAGER\n{data['finance_company']}\n{data['finance_address']}\n\n"+
+        f"Customer: {data['customer']}\nAddress: {data['cust_addr']}\nNIC: {data['nic']}"
+    )
+    top_data = [
+        ["Proforma Invoice No.", data["invoice_no"], "DATE:", data["date"]],
+        [
+            "MANUFACTURER: INDIA\nPIAGGIO VEHICLES PVT LTD\nPUNE, MAHARASHTRA",
+            "",
+            recipient_block,
+            ""
+        ]
+    ]
+    top_table = Table(top_data, colWidths=top_col_widths)
+    top_table.setStyle(TableStyle([
+        ("SPAN", (0,1), (1,1)),
+        ("SPAN", (2,1), (3,1)),
+        ("BOX", (0,0), (-1,-1), 1, colors.black),
+        ("INNERGRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("VALIGN", (0,0), (-1,-1), "TOP"),
+        ("FONTSIZE", (0,0), (-1,-1), 9),
+    ]))
+    story.append(top_table)
+    story.append(Spacer(1, 8))
 
-    c.showPage()
-    c.save()
+    desc_table = Table([
+        ["DESCRIPTION", "", "SELLING PRICE", f"{data['price']:,.2f}"],
+        ["MAKE", "PIAGGIO", "LEASE AMOUNT", f"{data['down']:,.2f}"],
+        ["MODEL", data["model"], "", ""],
+        ["COLOUR", data["color"], "", ""],
+        ["ENGINE NO", data["engine"], "", ""],
+        ["CHASSIS NO", data["chassis"], "", ""]
+    ], colWidths=[150, 200, 100, 95])
+    desc_table.setStyle(TableStyle([
+        ("BOX", (0,0), (-1,-1), 1, colors.black),
+        ("INNERGRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("FONTSIZE", (0,0), (-1,-1), 9),
+        ("VALIGN", (0,0), (-1,-1), "TOP")
+    ]))
+    story.append(desc_table)
+    story.append(Spacer(1, 8))
+
+    info_table = Table([[
+        Paragraph("""
+BRAND NEW DIESEL THREE WHEELER<br/>
+12V Self-start, four stroke, air cooled diesel engine<br/>
+435CC 8h.p.<br/>
+Warranty : 18 months or 25,000kms whichever comes first<br/>
+Services : 3 labor-free services will be provided
+""", small),
+        Paragraph("""
+REMARKS:<br/>
+Please note that the above price offered is based on the prevailing
+rates of exchange, import duties, other Government levies and
+any variations to the above will be adjusted in the final invoice.
+""", small)
+    ]], colWidths=[270, 275])
+    info_table.setStyle(TableStyle([
+        ("BOX", (0,0), (-1,-1), 1, colors.black),
+        ("INNERGRID", (0,0), (-1,-1), 0.5, colors.black),
+        ("VALIGN", (0,0), (-1,-1), "TOP"),
+    ]))
+    story.append(info_table)
+    story.append(Spacer(1, 10))
+
+    story.append(Paragraph("""
+<b>VALIDITY – 07 DAYS</b><br/>
+PAYMENT TERMS: All payments should be made in favor of the finance company per instructions.<br/><br/>
+
+<b>DELIVERY – Within 14 to 30 DAYS</b><br/>
+1. Prices & Specifications subject to change without prior notice.<br/>
+2. Goods being quoted are subject to availability at time of confirmed order.<br/>
+3. Model of the vehicle must be mentioned clearly on your purchase order.<br/>
+4. Seller is not responsible for delays due to government regulations or force majeure.
+""", small))
+    story.append(Spacer(1, 90))
+    story.append(Paragraph(".......................................................<br/>Authorized Signatory", small))
+
+    doc.build(story)
     return buf.getvalue()
 
 
@@ -474,11 +667,8 @@ def main():
                 chassis_no = st.text_input("Chassis No")
             with col_v2:
                 color = st.text_input("Color")
-                vehicle_type = st.selectbox("Vehicle Type", ["PICKUP", "VAN", "CAB", "TROLLEY", "AUTO"])
-                vehicle_yom = st.text_input("YOM (Year of Manufacture)", value=str(datetime.now().year))
                 total_price = st.number_input("Total Price (Rs)", min_value=0.0, value=0.0, step=1000.0)
                 down_payment = st.number_input("Down Payment", min_value=0.0, value=0.0, step=1000.0)
-                signatory_name = st.text_input("Signatory Name (e.g. Admin Executive signs for dealer)", value="")
 
         payment_method = st.selectbox("Payment Method", ["Cash", "Bank Transfer", "Cheque", "Card", "Other"])
 
@@ -534,9 +724,6 @@ def main():
                         "engine": engine_no,
                         "chassis": chassis_no,
                         "color": color,
-                        "type": vehicle_type,
-                        "yom": vehicle_yom,
-                        "signatory": signatory_name,
                         "price": total_price,
                         "down": down_payment,
                         "balance": balance,
@@ -587,4 +774,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

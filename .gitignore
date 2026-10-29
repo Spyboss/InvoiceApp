@@ -37,9 +37,3 @@ dist/
 .kiro/
 .qoder/
 .augment/
-
-# Backups
-*.bak
-
-# HTML->PDF render output
-html_pdf/out/
