@@ -89,11 +89,7 @@ def safe_float(v):
 
 def build_sales_pdf(data):
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=45, bottomMargin=35, leftMargin=40, rightMargin=40,
-                            title="Sales Invoice - Gunawardhana Enterprise, Tangalle",
-                            author="Software solution by UHADEV - uhadev.com",
-                            subject="Piaggio vehicle sales invoice",
-                            keywords="invoice, sales, piaggio, vehicle, tangalle, uhadev")
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=45, bottomMargin=35, leftMargin=40, rightMargin=40)
     elements = []
     elements.append(Paragraph("<b><font size=\"15\">SALES INVOICE</font></b>", styles["Title"]))
     elements.append(Spacer(1, 10))
@@ -116,11 +112,7 @@ def build_sales_pdf(data):
 
 def build_proforma_pdf(data):
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=45, bottomMargin=35, leftMargin=40, rightMargin=40,
-                            title="Proforma Invoice - Gunawardhana Enterprise, Tangalle",
-                            author="Software solution by UHADEV - uhadev.com",
-                            subject="Piaggio vehicle proforma invoice",
-                            keywords="proforma, invoice, piaggio, vehicle, tangalle, uhadev")
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=45, bottomMargin=35, leftMargin=40, rightMargin=40)
     elements = []
     elements.append(Paragraph("<b><font size=\"15\">PROFORMA INVOICE</font></b>", styles["Title"]))
     elements.append(Spacer(1, 10))
