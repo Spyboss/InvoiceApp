@@ -1,0 +1,18 @@
+/* app.css: the only stylesheet we own. pico supplies the base. */
+
+:root {
+	--pico-font-family: system-ui, -apple-system, "Segoe UI", roboto, sans-serif;
+	--pico-primary: #0b5d1e;
+	--pico-primary-hover: #084716;
+	--pico-primary-focus: rgba(11, 93, 30, 0.25);
+	--pico-primary-inverse: #fff;
+}
+
+article {
+	max-width: 32rem;
+	margin-inline: auto;
+}
+
+code {
+	word-break: break-all;
+}

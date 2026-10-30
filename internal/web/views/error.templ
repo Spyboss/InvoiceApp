@@ -1,0 +1,28 @@
+package views
+
+// ErrorPage is the only page the app has until the first real screen lands.
+// It carries the request id so a user can quote it and the log can be found.
+templ ErrorPage(title string, detail string, requestID string) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<meta name="robots" content="noindex"/>
+			<title>{ title }</title>
+			<link rel="stylesheet" href="/static/pico.min.css"/>
+			<link rel="stylesheet" href="/static/app.css"/>
+		</head>
+		<body>
+			<main class="container">
+				<article>
+					<h1>{ title }</h1>
+					<p>{ detail }</p>
+					if requestID != "" {
+						<p><small>request id <code>{ requestID }</code></small></p>
+					}
+				</article>
+			</main>
+		</body>
+	</html>
+}

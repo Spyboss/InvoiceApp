@@ -1,0 +1,52 @@
+name: ci
+
+on:
+  push:
+    branches: [main, rewrite/go-htmx]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: invoice_app
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: invoiceapp_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U invoice_app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://invoice_app:test@127.0.0.1:5432/invoiceapp_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: install templ
+        run: go install github.com/a-h/templ/cmd/templ@$(go list -m -f '{{.Version}}' github.com/a-h/templ)
+
+      - name: generate templates
+        run: templ generate -fail
+
+      - name: generated files must be committed
+        run: git diff --exit-code
+
+      - run: go vet ./...
+
+      - run: go test -race ./...
+
+      - name: build image
+        run: docker build -t invoiceapp:ci .

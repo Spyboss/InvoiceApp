@@ -49,7 +49,7 @@ sqlc generate                  # after editing queries
 
 ## current state
 
-step 0 (toolchain). the code scaffold does not exist yet. the next commit is step 1 as specified in `docs/PLAN.md`.
+step 1: the skeleton exists (`cmd/server`, `internal/config`, `internal/db`, `internal/httpx`, `internal/web`) and is green locally. the next action is the railway staging deploy, then step 2 as specified in `docs/PLAN.md`.
 
 ## reference material
 

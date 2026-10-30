@@ -29,7 +29,7 @@ rules:
 
 ## D03 — stack: go + templ + htmx + pico css, no node toolchain
 
-**date** 2026-10-30 · **status** proposed (waiting on owner confirmation)
+**date** 2026-10-30 · **status** accepted (owner delegated the call)
 
 **decision** go (latest stable), `net/http` with go 1.22+ method patterns, `templ` for html, htmx 2 vendored, pico css v2 + one hand-written `app.css`. no npm, no tailwind, no bundler. templates and assets embedded with `embed.FS`, so the build is one static binary.
 
@@ -126,7 +126,9 @@ rules:
 
 ## D12 — local dev needs no docker
 
-**date** 2026-10-30 · **status** proposed (waiting on owner confirmation)
+**date** 2026-10-30 · **status** accepted (owner delegated the call)
+
+**in place** go 1.27.0, postgresql 18.6 (service `postgresql-x64-18`), templ 0.3.1100. local role `invoice_app`, databases `invoiceapp_dev` and `invoiceapp_test`. `psql` and `~/go/bin` are on the user PATH.
 
 **decision** local dev = native postgres on windows + `go run ./cmd/server`, pointing at the railway gotenberg service for pdfs. docker is only needed if we later want fully offline pdf rendering.
 

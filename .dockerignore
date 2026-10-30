@@ -1,0 +1,15 @@
+.git
+.github
+docs
+html_pdf
+*.md
+.env
+.env.*
+web_app.py
+web_app.py.bak
+invoice_app.py
+api
+client
+UPLOAD_INSTRUCTIONS.md
+*.db
+*.log

@@ -39,3 +39,7 @@ dist/
 .kiro/
 .qoder/
 .augment/
+
+# Go
+*.exe
+

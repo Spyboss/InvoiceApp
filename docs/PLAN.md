@@ -6,8 +6,8 @@ status: `todo` · `in progress` · `done` · `blocked`
 
 | # | step | deliverable | acceptance | status |
 |---|---|---|---|---|
-| 0 | toolchain | go, postgres, templ installed on the dev machine | `go version`, `psql --version`, `templ version` all print | in progress |
-| 1 | skeleton + deploy | config, router, middleware, `/healthz`, db ping, dockerfile, railway.json, ci, `.env.example` on branch `rewrite/go-htmx` | `go vet ./...` + `go test ./...` green; server boots; `curl /healthz` returns version+commit; staging deploy green; logs are json | todo |
+| 0 | toolchain | go, postgres, templ installed on the dev machine | `go version`, `psql --version`, `templ version` all print | done |
+| 1 | skeleton + deploy | config, router, middleware, `/healthz`, db ping, dockerfile, railway.json, ci, `.env.example` on branch `rewrite/go-htmx` | `go vet ./...` + `go test ./...` green; server boots; `curl /healthz` returns version+commit; staging deploy green; logs are json | in progress |
 | 2 | tenancy + auth | `tenants`, `users`, `sessions`, `audit_log`, rls, login/logout, csrf, permissions, first-run owner invite | two tenants on one db cannot see each other's rows (test); login/logout/lockout work; every write produces an audit row | todo |
 | 3 | customers + stock | customers crud, vehicles crud, stock movement ledger, chassis uniqueness, statuses | stock cannot go negative (test); duplicate chassis rejected per tenant; movement history matches on-hand | todo |
 | 4 | documents + numbering + pdf | quotation, sales cash, sales leasing, advance receipt, proforma; atomic numbering; gotenberg pipeline; pdf archive + hash | numbers are unique per tenant/type/year under concurrent creates (test); proforma pixel-diff vs `BIBILE 01.docx` within tolerance; pdf sha256 stable | todo |
@@ -18,7 +18,9 @@ status: `todo` · `in progress` · `done` · `blocked`
 
 ## current step
 
-step 0. waiting on the owner to install go, postgres and templ, then confirm D03 (no node / pico) and D12 (native postgres for dev).
+step 1 is built and green locally (go vet, go test, go test -race, server boots, /healthz answers with a real database ping). what remains for step 1 is the first railway staging deploy of branch `rewrite/go-htmx`.
+
+step 2 (tenancy + auth) starts only after that deploy is green and the owner has clicked through `/healthz` on the deployed url.
 
 ## out of scope for v1 (see D11)
 
