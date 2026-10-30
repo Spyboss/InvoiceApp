@@ -23,6 +23,7 @@ type Deps struct {
 	ForgetTenant  func(host string)
 	SecureCookies bool
 	Now           func() time.Time
+	PDF           PDFRenderer
 }
 
 type Server struct {
@@ -35,6 +36,7 @@ type Server struct {
 	forget   func(host string)
 	secure   bool
 	now      func() time.Time
+	pdf      PDFRenderer
 }
 
 func New(d Deps) http.Handler {
@@ -52,6 +54,7 @@ func New(d Deps) http.Handler {
 		forget:   d.ForgetTenant,
 		secure:   d.SecureCookies,
 		now:      now,
+		pdf:      d.PDF,
 	}
 	s.auth.Now = now
 
@@ -83,6 +86,12 @@ func New(d Deps) http.Handler {
 	mux.Handle("POST /vehicles/{id}/status", s.requirePermission("stock.write", s.vehicleStatusSubmit()))
 
 	mux.Handle("GET /stock", s.requirePermission("stock.read", s.stockPage()))
+
+	mux.Handle("GET /documents", s.requirePermission("document.read", s.documentsPage()))
+	mux.Handle("GET /documents/new", s.requirePermission("document.create", s.documentNewPage()))
+	mux.Handle("POST /documents", s.requirePermission("document.create", s.documentCreate()))
+	mux.Handle("GET /documents/{id}", s.requirePermission("document.read", s.documentPage()))
+	mux.Handle("GET /documents/{id}/pdf", s.requirePermission("document.read", s.documentPDF()))
 
 	mux.Handle("/", s.notFound())
 

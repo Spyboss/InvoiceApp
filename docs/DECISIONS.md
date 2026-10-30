@@ -224,3 +224,28 @@ rules:
 **why** a branch means a preview environment, a restore drill or a risky migration is a copy-on-write operation measured in seconds, not a volume copy. instant restore covers the "someone deleted a day" case that a volume backup only partly covers. at this scale both are free.
 
 **cost** the free tier scales compute to zero, so the first request after idle pays a cold start (measured 0.4 to 1.1 s during the cutover). if it is felt at the counter, the paid tier keeps a warm floor. also one more vendor to hold credentials for; the api key and database password live in railway variables and the local neon profile only.
+
+## D21 — numbering, documents, and the archived pdf
+
+**date** 2026-10-30 · **status** accepted (supersedes the r2 storage line in section 5 of `ARCHITECTURE.md`, and refines D06–D10)
+
+**context** step 4 turns a quotation into paper and a sale into stock leaving the yard. the live app numbers invoices from one csv with no lock, lets any total be typed, and regenerates every print from whatever the data says today. each of those is a way the books stop matching the paper.
+
+**decision**
+
+- numbering: `document_series (tenant_id, doc_type, year, last_value)`, bumped by `insert … on conflict do update … returning` inside the transaction that writes the document. postgres takes a row lock, so concurrent clerks get consecutive numbers; a rollback returns the number, so there are no gaps. the number is stored as a string of at least 4 digits. prefixes and per type formats come with settings in step 6; issued numbers never change.
+- one `documents` table for QUOTATION, SALES_CASH, SALES_LEASING, PROFORMA and ADVANCE. one customer and one vehicle per document. customer and vehicle details are copied into the row at issue, so editing a customer or unit later cannot change what was printed. no line items: a dealership document is one unit.
+- statuses: a quotation is OPEN until it becomes an invoice (CONVERTED); everything else is ISSUED. VOID arrives with approvals in step 6. the `documents_immutable` trigger (SQLSTATE DOC01) refuses any update to a printed field; only status and updated_at may move.
+- money: price, down and balance are cents, with `balance = price - down` enforced by the database. a cash invoice is paid in full by definition; a leasing sale or proforma must leave a balance; an advance must be a real deposit.
+- stock: creating a cash or leasing invoice locks the unit, sets it SOLD and writes the `SELL` movement in the same transaction. an advance reserves an available unit; a quotation or proforma does not move stock. only an AVAILABLE or RESERVED unit can carry a document; a RETURNED unit needs an inspection step before it can be sold again, which is not built yet.
+- a quotation converts at most once: the quote row is locked and set CONVERTED, the invoice keeps `quote_id`, and the customer and unit must match the quote.
+- permissions: `document.read` for every role, `document.read.all` for OWNER, MANAGER and ACCOUNTS, `document.create` for OWNER, MANAGER and SALES. a sales user sees and prints only documents they created; someone else's document is a 404, not a 403.
+- printing: html rendered by gotenberg v8 (`/forms/chromium/convert/html`) on railway's private network, with basic auth. every font and image is embedded as a data url; nothing is fetched while rendering.
+- storage: the first successful print is archived in `document_pdfs` (bytea plus sha256), append only. later downloads serve those exact bytes, so a sale never depends on gotenberg being up and a template fix cannot rewrite history. r2 is deferred until size or retention demands it; the table is the seam.
+- proforma: fixed 612x792pt letter, geometry derived from `BIBILE 01.docx` (566.5pt grid at -45.25pt, rows and borders from twips), singer wordmark svg and letterhead jpeg extracted from the docx, carlito embedded for calibri metrics. verified by rendering the docx through gotenberg's libreoffice route and comparing text blocks: the table and body sit within about 1pt; the terms wrap and the signature block differ where libreoffice and chromium break a line differently.
+- the proforma is singer's paper, so proforma creation is refused for any other finance company until settings can supply another letterhead. every other document uses the dealership's own a4 template.
+- `vehicles.vehicle_type` (petrol, electric, …) was added because the proforma prints TYPE. it is captured at intake.
+
+**why** a number is the identity of a sale; a duplicate or a gap is a fraud signal before it is a bug. snapshots and the update trigger mean the paper cannot be rewritten after the customer leaves. storing the first print is cheaper than proving a regenerated one is byte identical.
+
+**cost** pdf bytes live in postgres until r2; around 60kb per invoice is fine at this volume, and moving later is a copy plus a reader change. one more railway service to keep alive, and a network dependency at the first print; afterwards the archive serves. the proforma is tied to singer paper until another letterhead is supplied.

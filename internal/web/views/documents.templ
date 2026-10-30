@@ -1,0 +1,371 @@
+package views
+
+// DocTypeOption is one choice in a document filter or form.
+type DocTypeOption struct {
+	Value    string
+	Label    string
+	Selected bool
+}
+
+// CustomerOption and VehicleOption are the pickers on the document form.
+type CustomerOption struct {
+	ID    string
+	Label string
+}
+
+type VehicleOption struct {
+	ID    string
+	Label string
+	Price string
+}
+
+type DocumentRow struct {
+	ID       string
+	No       string
+	Type     string
+	Date     string
+	Customer string
+	Vehicle  string
+	Amount   string
+	Status   string
+}
+
+type DocumentsData struct {
+	TenantName string
+	UserName   string
+	Nav        []NavLink
+	Query      string
+	Type       string
+	CanCreate  bool
+	ReadAll    bool
+	Types      []DocTypeOption
+	Rows       []DocumentRow
+}
+
+templ Documents(d DocumentsData) {
+	@Layout("Documents", d.TenantName, d.UserName, d.Nav, documentsBody(d))
+}
+
+templ documentsBody(d DocumentsData) {
+	<article class="wide">
+		<header>
+			<h1>Documents</h1>
+			<form method="get" action="/documents" class="search">
+				<select name="type" aria-label="Document type">
+					for _, t := range d.Types {
+						<option value={ t.Value } selected?={ t.Selected }>{ t.Label }</option>
+					}
+				</select>
+				<input type="search" name="q" value={ d.Query } placeholder="Number, customer or chassis" aria-label="Search documents"/>
+				<button type="submit" class="secondary">Filter</button>
+			</form>
+		</header>
+
+		if d.CanCreate {
+			<p><a role="button" href="/documents/new">New document</a></p>
+		}
+		if !d.ReadAll {
+			<p class="muted">You see the documents you issued. The owner, manager and accounts see every document.</p>
+		}
+
+		if len(d.Rows) == 0 {
+			<p class="muted">No documents match.</p>
+		} else {
+			<div class="table-scroll">
+				<table>
+					<thead>
+						<tr>
+							<th scope="col">No</th>
+							<th scope="col">Type</th>
+							<th scope="col">Date</th>
+							<th scope="col">Customer</th>
+							<th scope="col">Vehicle</th>
+							<th scope="col">Amount (Rs)</th>
+							<th scope="col">Status</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, row := range d.Rows {
+							<tr>
+								<td><a href={ "/documents/" + row.ID }>{ row.No }</a></td>
+								<td>{ row.Type }</td>
+								<td>{ row.Date }</td>
+								<td>{ row.Customer }</td>
+								<td>{ row.Vehicle }</td>
+								<td>{ row.Amount }</td>
+								<td><span class="status">{ row.Status }</span></td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	</article>
+}
+
+// DocumentFields is the editable part of a document before it is issued.
+type DocumentFields struct {
+	DocType        string
+	DocDate        string
+	CustomerID     string
+	VehicleID      string
+	Price          string
+	Down           string
+	FinanceCompany string
+	FinanceAddress string
+	Notes          string
+	QuoteID        string
+}
+
+type DocumentFormData struct {
+	TenantName    string
+	UserName      string
+	Nav           []NavLink
+	CSRFToken     string
+	Action        string
+	Heading       string
+	Submit        string
+	Cancel        string
+	Fields        DocumentFields
+	Customers     []CustomerOption
+	Vehicles      []VehicleOption
+	Types         []DocTypeOption
+	QuoteLocked   bool
+	QuoteNo       string
+	CustomerLabel string
+	VehicleLabel  string
+	Error         string
+}
+
+templ DocumentForm(d DocumentFormData) {
+	@Layout(d.Heading, d.TenantName, d.UserName, d.Nav, documentFormBody(d))
+}
+
+templ documentFormBody(d DocumentFormData) {
+	<article class="wide">
+		<header>
+			<h1>{ d.Heading }</h1>
+			<p class="muted">Once issued, a document cannot be edited. Check the customer, the unit and the amounts before you submit.</p>
+		</header>
+
+		if d.Error != "" {
+			<p role="alert">{ d.Error }</p>
+		}
+
+		<form method="post" action={ d.Action }>
+			<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
+			if d.QuoteLocked {
+				<input type="hidden" name="quote_id" value={ d.Fields.QuoteID }/>
+				<input type="hidden" name="customer_id" value={ d.Fields.CustomerID }/>
+				<input type="hidden" name="vehicle_id" value={ d.Fields.VehicleID }/>
+				<div class="quote-summary">
+					<p><strong>Quotation { d.QuoteNo }</strong></p>
+					<p>Customer: { d.CustomerLabel }</p>
+					<p>Vehicle: { d.VehicleLabel }</p>
+				</div>
+			}
+
+			<div class="grid">
+				<label>
+					Document
+					<select name="doc_type" required>
+						for _, t := range d.Types {
+							<option value={ t.Value } selected?={ t.Selected }>{ t.Label }</option>
+						}
+					</select>
+				</label>
+				<label>
+					Date
+					<input type="date" name="doc_date" value={ d.Fields.DocDate } required/>
+				</label>
+			</div>
+
+			if !d.QuoteLocked {
+				<label>
+					Customer
+					<select name="customer_id" required>
+						<option value="">Choose a customer</option>
+						for _, c := range d.Customers {
+							<option value={ c.ID } selected?={ c.ID == d.Fields.CustomerID }>{ c.Label }</option>
+						}
+					</select>
+					<small>Add the customer first if they are not in the list.</small>
+				</label>
+				<label>
+					Vehicle
+					<select name="vehicle_id" required>
+						<option value="">Choose a vehicle</option>
+						for _, v := range d.Vehicles {
+							<option value={ v.ID } selected?={ v.ID == d.Fields.VehicleID }>{ v.Label }</option>
+						}
+					</select>
+					<small>Only units that are available or reserved are listed.</small>
+				</label>
+			}
+
+			<div class="grid">
+				<label>
+					Selling price (Rs)
+					<input type="text" name="price" value={ d.Fields.Price } inputmode="decimal" placeholder="1,250,000.00" required/>
+				</label>
+				<label>
+					Advance / down payment (Rs)
+					<input type="text" name="down" value={ d.Fields.Down } inputmode="decimal" placeholder="0.00"/>
+					<small>Cash sales are recorded as paid in full whatever is here. A leasing sale must leave a balance.</small>
+				</label>
+			</div>
+
+			<div class="grid">
+				<label>
+					Finance company
+					<input type="text" name="finance_company" value={ d.Fields.FinanceCompany } maxlength="120" placeholder="SINGER FINANCE"/>
+					<small>Needed for a leasing sale or a proforma.</small>
+				</label>
+				<label>
+					Finance company address
+					<input type="text" name="finance_address" value={ d.Fields.FinanceAddress } maxlength="500"/>
+				</label>
+			</div>
+
+			<label>
+				Notes
+				<textarea name="notes" rows="2" maxlength="2000">{ d.Fields.Notes }</textarea>
+			</label>
+
+			<div class="actions">
+				<button type="submit">{ d.Submit }</button>
+				<a href={ d.Cancel } role="button" class="secondary">Cancel</a>
+			</div>
+		</form>
+	</article>
+}
+
+type DocumentDetailData struct {
+	TenantName      string
+	UserName        string
+	Nav             []NavLink
+	ID              string
+	TypeLabel       string
+	DocNo           string
+	Date            string
+	Status          string
+	Created         bool
+	CustomerID      string
+	CustomerName    string
+	CustomerNIC     string
+	CustomerPhone   string
+	CustomerAddress string
+	VehicleID       string
+	VehicleLine     string
+	Chassis         string
+	Engine          string
+	Colour          string
+	Type            string
+	YOM             string
+	Price           string
+	Down            string
+	Balance         string
+	FinanceCompany  string
+	FinanceAddress  string
+	Notes           string
+	CanCreate       bool
+	CanPrint        bool
+	IsQuote         bool
+	IsOpenQuote     bool
+}
+
+templ DocumentDetail(d DocumentDetailData) {
+	@Layout(d.TypeLabel+" "+d.DocNo, d.TenantName, d.UserName, d.Nav, documentDetailBody(d))
+}
+
+templ documentDetailBody(d DocumentDetailData) {
+	<article class="wide">
+		<header>
+			<h1>{ d.TypeLabel } { d.DocNo }</h1>
+			<p><span class="status">{ d.Status }</span></p>
+			if d.Created {
+				<p role="status">Document issued.</p>
+			}
+		</header>
+
+		<dl class="facts">
+			<dt>Date</dt>
+			<dd>{ d.Date }</dd>
+			<dt>Customer</dt>
+			<dd><a href={ "/customers/" + d.CustomerID }>{ d.CustomerName }</a></dd>
+			if d.CustomerNIC != "" {
+				<dt>NIC</dt>
+				<dd>{ d.CustomerNIC }</dd>
+			}
+			if d.CustomerPhone != "" {
+				<dt>Phone</dt>
+				<dd>{ d.CustomerPhone }</dd>
+			}
+			if d.CustomerAddress != "" {
+				<dt>Address</dt>
+				<dd>{ d.CustomerAddress }</dd>
+			}
+			<dt>Vehicle</dt>
+			<dd><a href={ "/vehicles/" + d.VehicleID }>{ d.VehicleLine }</a></dd>
+			<dt>Chassis</dt>
+			<dd><code>{ d.Chassis }</code></dd>
+			if d.Engine != "" {
+				<dt>Engine</dt>
+				<dd>{ d.Engine }</dd>
+			}
+			if d.Type != "" {
+				<dt>Type</dt>
+				<dd>{ d.Type }</dd>
+			}
+			if d.Colour != "" {
+				<dt>Colour</dt>
+				<dd>{ d.Colour }</dd>
+			}
+			if d.YOM != "" {
+				<dt>Year</dt>
+				<dd>{ d.YOM }</dd>
+			}
+			if d.FinanceCompany != "" {
+				<dt>Finance</dt>
+				<dd>{ d.FinanceCompany }</dd>
+			}
+			if d.FinanceAddress != "" {
+				<dt>Finance address</dt>
+				<dd>{ d.FinanceAddress }</dd>
+			}
+			if d.Notes != "" {
+				<dt>Notes</dt>
+				<dd>{ d.Notes }</dd>
+			}
+		</dl>
+
+		<h2>Money</h2>
+		<div class="table-scroll">
+			<table>
+				<tbody>
+					<tr><th scope="row">Selling price</th><td>Rs { d.Price }</td></tr>
+					<tr><th scope="row">Advance / paid</th><td>Rs { d.Down }</td></tr>
+					<tr><th scope="row">Balance</th><td>Rs { d.Balance }</td></tr>
+				</tbody>
+			</table>
+		</div>
+
+		<footer>
+			<div class="actions">
+				<a href="/documents" role="button" class="secondary">Back to documents</a>
+				if d.CanPrint {
+					<a href={ "/documents/" + d.ID + "/pdf" } role="button" target="_blank" rel="noopener">Download PDF</a>
+				}
+				if d.IsOpenQuote && d.CanCreate {
+					<a href={ "/documents/new?quote_id=" + d.ID } role="button">Create invoice from quotation</a>
+				}
+			</div>
+		</footer>
+
+		if d.IsQuote {
+			<p class="muted">A quotation is open until it is converted. To change the price, issue a new quotation.</p>
+		} else {
+			<p class="muted">Issued documents cannot be edited.</p>
+		}
+	</article>
+}

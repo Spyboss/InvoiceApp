@@ -77,6 +77,11 @@ func (c *testClock) Advance(d time.Duration) { c.at = c.at.Add(d) }
 
 func newTestServer(t *testing.T) (http.Handler, *testClock) {
 	t.Helper()
+	return newTestServerWithPDF(t, nil)
+}
+
+func newTestServerWithPDF(t *testing.T, renderer PDFRenderer) (http.Handler, *testClock) {
+	t.Helper()
 	if webStore == nil {
 		t.Skip("TEST_DATABASE_URL not set")
 	}
@@ -98,6 +103,7 @@ func newTestServer(t *testing.T) (http.Handler, *testClock) {
 			return tn, err
 		},
 		Now: clock.Now,
+		PDF: renderer,
 	})
 	return h, clock
 }

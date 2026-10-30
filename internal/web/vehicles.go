@@ -370,6 +370,7 @@ func readVehicleForm(r *http.Request, now time.Time) (views.VehicleFields, store
 		StockNo:    strings.TrimSpace(r.PostFormValue("stock_no")),
 		Make:       strings.TrimSpace(r.PostFormValue("make")),
 		Model:      strings.TrimSpace(r.PostFormValue("model")),
+		Type:       strings.TrimSpace(r.PostFormValue("vehicle_type")),
 		Variant:    strings.TrimSpace(r.PostFormValue("variant")),
 		ChassisNo:  strings.ToUpper(strings.TrimSpace(r.PostFormValue("chassis_no"))),
 		EngineNo:   strings.TrimSpace(r.PostFormValue("engine_no")),
@@ -391,6 +392,8 @@ func readVehicleForm(r *http.Request, now time.Time) (views.VehicleFields, store
 		return fail("Enter the model.")
 	case utf8.RuneCountInString(f.Make) > 80, utf8.RuneCountInString(f.Model) > 80:
 		return fail("The make or model is too long. 80 characters each at most.")
+	case utf8.RuneCountInString(f.Type) > 40:
+		return fail("The type is too long. 40 characters at most.")
 	case utf8.RuneCountInString(f.ChassisNo) < 5:
 		return fail("Enter the chassis number. It is at least 5 characters.")
 	case utf8.RuneCountInString(f.ChassisNo) > 40:
@@ -411,6 +414,7 @@ func readVehicleForm(r *http.Request, now time.Time) (views.VehicleFields, store
 		StockNo:   f.StockNo,
 		Make:      f.Make,
 		Model:     f.Model,
+		Type:      f.Type,
 		Variant:   f.Variant,
 		ChassisNo: f.ChassisNo,
 		EngineNo:  f.EngineNo,
@@ -478,6 +482,7 @@ func vehicleFields(v store.Vehicle) views.VehicleFields {
 		StockNo:    v.StockNo,
 		Make:       v.Make,
 		Model:      v.Model,
+		Type:       v.Type,
 		Variant:    v.Variant,
 		ChassisNo:  v.ChassisNo,
 		EngineNo:   v.EngineNo,
@@ -495,6 +500,7 @@ func vehicleAudit(v store.Vehicle) map[string]string {
 		"stock_no":   v.StockNo,
 		"make":       v.Make,
 		"model":      v.Model,
+		"type":       v.Type,
 		"chassis_no": v.ChassisNo,
 		"colour":     v.Colour,
 		"status":     v.Status,

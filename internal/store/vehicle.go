@@ -18,11 +18,11 @@ const (
 	StatusReturned  = "RETURNED"
 )
 
-// transitionTo lists the statuses each status may move to. Step 3 only needs
-// reserve and release; sell and return arrive with invoices in step 4.
+// transitionTo lists the statuses each status may move to. Reserving is a
+// status change; selling also writes a SELL row to the ledger.
 var transitionsTo = map[string][]string{
-	StatusAvailable: {StatusReserved},
-	StatusReserved:  {StatusAvailable},
+	StatusAvailable: {StatusReserved, StatusSold},
+	StatusReserved:  {StatusAvailable, StatusSold},
 }
 
 // Vehicle is one physical unit in stock.
@@ -32,6 +32,7 @@ type Vehicle struct {
 	StockNo    string
 	Make       string
 	Model      string
+	Type       string
 	Variant    string
 	ChassisNo  string
 	EngineNo   string
@@ -46,7 +47,7 @@ type Vehicle struct {
 	UpdatedAt  time.Time
 }
 
-const vehicleColumns = `id, tenant_id, stock_no, make, model, variant, chassis_no,
+const vehicleColumns = `id, tenant_id, stock_no, make, model, vehicle_type, variant, chassis_no,
 	engine_no, colour, yom, cost_cents, price_cents, status, received_at, notes,
 	created_at, updated_at`
 
@@ -55,6 +56,7 @@ type VehicleParams struct {
 	StockNo    string
 	Make       string
 	Model      string
+	Type       string
 	Variant    string
 	ChassisNo  string
 	EngineNo   string
@@ -70,13 +72,13 @@ type VehicleParams struct {
 // inside InTenant; the caller's transaction is what makes the pair atomic.
 func (s *Store) CreateVehicle(ctx context.Context, tenantID, createdBy uuid.UUID, p VehicleParams) (Vehicle, error) {
 	const q = `
-		insert into vehicles (tenant_id, stock_no, make, model, variant, chassis_no, engine_no,
+		insert into vehicles (tenant_id, stock_no, make, model, vehicle_type, variant, chassis_no, engine_no,
 			colour, yom, cost_cents, price_cents, received_at, notes, created_by)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		returning ` + vehicleColumns
 
 	v, err := scanVehicle(s.db.QueryRow(ctx, q,
-		tenantID, p.StockNo, p.Make, p.Model, p.Variant, p.ChassisNo, p.EngineNo,
+		tenantID, p.StockNo, p.Make, p.Model, p.Type, p.Variant, p.ChassisNo, p.EngineNo,
 		p.Colour, p.YOM, p.CostCents, p.PriceCents, p.ReceivedAt, p.Notes, createdBy))
 	if err != nil {
 		return Vehicle{}, fmt.Errorf("create vehicle: %w", vehicleError(err))
@@ -101,14 +103,14 @@ func (s *Store) CreateVehicle(ctx context.Context, tenantID, createdBy uuid.UUID
 func (s *Store) UpdateVehicle(ctx context.Context, tenantID, id uuid.UUID, p VehicleParams) (Vehicle, error) {
 	const q = `
 		update vehicles
-		set stock_no = $3, make = $4, model = $5, variant = $6, chassis_no = $7,
-		    engine_no = $8, colour = $9, yom = $10, cost_cents = $11, price_cents = $12,
-		    received_at = $13, notes = $14, updated_at = now()
+		set stock_no = $3, make = $4, model = $5, vehicle_type = $6, variant = $7,
+		    chassis_no = $8, engine_no = $9, colour = $10, yom = $11, cost_cents = $12,
+		    price_cents = $13, received_at = $14, notes = $15, updated_at = now()
 		where tenant_id = $1 and id = $2 and deleted_at is null
 		returning ` + vehicleColumns
 
 	v, err := scanVehicle(s.db.QueryRow(ctx, q,
-		tenantID, id, p.StockNo, p.Make, p.Model, p.Variant, p.ChassisNo, p.EngineNo,
+		tenantID, id, p.StockNo, p.Make, p.Model, p.Type, p.Variant, p.ChassisNo, p.EngineNo,
 		p.Colour, p.YOM, p.CostCents, p.PriceCents, p.ReceivedAt, p.Notes))
 	if err != nil {
 		return Vehicle{}, fmt.Errorf("update vehicle: %w", vehicleError(err))
@@ -189,7 +191,7 @@ func canTransition(from, to string) bool {
 
 func scanVehicle(row rowScanner) (Vehicle, error) {
 	var v Vehicle
-	err := row.Scan(&v.ID, &v.TenantID, &v.StockNo, &v.Make, &v.Model, &v.Variant,
+	err := row.Scan(&v.ID, &v.TenantID, &v.StockNo, &v.Make, &v.Model, &v.Type, &v.Variant,
 		&v.ChassisNo, &v.EngineNo, &v.Colour, &v.YOM, &v.CostCents, &v.PriceCents,
 		&v.Status, &v.ReceivedAt, &v.Notes, &v.CreatedAt, &v.UpdatedAt)
 	if err != nil {

@@ -14,6 +14,7 @@ import (
 	"github.com/spyboss/invoiceapp/internal/buildinfo"
 	"github.com/spyboss/invoiceapp/internal/config"
 	"github.com/spyboss/invoiceapp/internal/db"
+	"github.com/spyboss/invoiceapp/internal/pdf"
 	"github.com/spyboss/invoiceapp/internal/store"
 	"github.com/spyboss/invoiceapp/internal/tenant"
 	"github.com/spyboss/invoiceapp/internal/web"
@@ -66,6 +67,7 @@ func run() error {
 			ResolveTenant: resolver.ByHost,
 			ForgetTenant:  resolver.Forget,
 			SecureCookies: cfg.Env != config.EnvDev,
+			PDF:           pdf.New(cfg.GotenbergURL, cfg.GotenbergUsername, cfg.GotenbergPassword),
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,

@@ -87,6 +87,7 @@ type VehicleFields struct {
 	StockNo    string
 	Make       string
 	Model      string
+	Type       string
 	Variant    string
 	ChassisNo  string
 	EngineNo   string
@@ -154,35 +155,41 @@ templ vehicleFormBody(d VehicleFormData) {
 					<input type="text" name="variant" value={ d.Fields.Variant } maxlength="80"/>
 				</label>
 				<label>
-					Colour
-					<input type="text" name="colour" value={ d.Fields.Colour } maxlength="40"/>
+					Type
+					<input type="text" name="vehicle_type" value={ d.Fields.Type } maxlength="40" placeholder="Petrol, electric"/>
 				</label>
 			</div>
 			<div class="grid">
+				<label>
+					Colour
+					<input type="text" name="colour" value={ d.Fields.Colour } maxlength="40"/>
+				</label>
 				<label>
 					Chassis number
 					<input type="text" name="chassis_no" value={ d.Fields.ChassisNo } minlength="5" maxlength="40" required/>
 				</label>
+			</div>
+			<div class="grid">
 				<label>
 					Engine number
 					<input type="text" name="engine_no" value={ d.Fields.EngineNo } maxlength="40"/>
 				</label>
-			</div>
-			<div class="grid">
 				<label>
 					Year of manufacture
 					<input type="number" name="yom" value={ d.Fields.YOM } min="1990" max="2100"/>
 				</label>
+			</div>
+			<div class="grid">
 				<label>
 					Price (Rs)
 					<input type="text" name="price" value={ d.Fields.Price } inputmode="decimal" placeholder="0.00"/>
 				</label>
+				<label>
+					Cost (Rs)
+					<input type="text" name="cost" value={ d.Fields.Cost } inputmode="decimal" placeholder="0.00"/>
+				</label>
 			</div>
-			<label>
-				Cost (Rs)
-				<input type="text" name="cost" value={ d.Fields.Cost } inputmode="decimal" placeholder="0.00"/>
-				<small>What the dealership paid. Only owner and manager can see or set this.</small>
-			</label>
+			<small>Cost is what the dealership paid. Only owner and manager can see it.</small>
 			<label>
 				Notes
 				<textarea name="notes" rows="2" maxlength="2000">{ d.Fields.Notes }</textarea>
@@ -226,6 +233,10 @@ templ vehicleDetailBody(d VehicleDetailData) {
 		<dl class="facts">
 			<dt>Stock no</dt>
 			<dd>{ orDash(d.Fields.StockNo) }</dd>
+			<dt>Model</dt>
+			<dd>{ orDash(d.Fields.Model) }</dd>
+			<dt>Type</dt>
+			<dd>{ orDash(d.Fields.Type) }</dd>
 			<dt>Variant</dt>
 			<dd>{ orDash(d.Fields.Variant) }</dd>
 			<dt>Chassis</dt>

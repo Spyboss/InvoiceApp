@@ -28,6 +28,11 @@ type Config struct {
 	// DevTenantSlug lets http://localhost resolve to a tenant without hosts
 	// file entries. It is refused in production.
 	DevTenantSlug string
+	// Gotenberg renders print documents. Empty means printing is unavailable;
+	// the rest of the app still runs.
+	GotenbergURL      string
+	GotenbergUsername string
+	GotenbergPassword string
 }
 
 // Load reads configuration from getenv, which is os.Getenv in production and a
@@ -57,12 +62,27 @@ func Load(getenv func(string) string) (Config, error) {
 		problems = append(problems, err)
 	}
 
+	gotenbergURL := strings.TrimSpace(getenv("GOTENBERG_URL"))
+	if gotenbergURL != "" {
+		if err := validateHTTPURL("GOTENBERG_URL", gotenbergURL); err != nil {
+			problems = append(problems, err)
+		}
+	}
+	gotenbergUser := strings.TrimSpace(getenv("GOTENBERG_USERNAME"))
+	gotenbergPass := strings.TrimSpace(getenv("GOTENBERG_PASSWORD"))
+	if (gotenbergUser == "") != (gotenbergPass == "") {
+		problems = append(problems, errors.New("GOTENBERG_USERNAME and GOTENBERG_PASSWORD must be set together"))
+	}
+
 	cfg := Config{
-		Env:           env,
-		HTTPAddr:      httpAddr(getenv),
-		DatabaseURL:   databaseURL,
-		LogLevel:      level,
-		DevTenantSlug: strings.TrimSpace(getenv("TENANT_DEV")),
+		Env:               env,
+		HTTPAddr:          httpAddr(getenv),
+		DatabaseURL:       databaseURL,
+		LogLevel:          level,
+		DevTenantSlug:     strings.TrimSpace(getenv("TENANT_DEV")),
+		GotenbergURL:      gotenbergURL,
+		GotenbergUsername: gotenbergUser,
+		GotenbergPassword: gotenbergPass,
 	}
 	if cfg.Env == EnvProduction && cfg.DevTenantSlug != "" {
 		problems = append(problems, errors.New("TENANT_DEV must be empty in production"))
@@ -100,6 +120,20 @@ func validateDatabaseURL(raw string) error {
 	}
 	if strings.TrimPrefix(u.Path, "/") == "" {
 		return errors.New("DATABASE_URL: missing database name")
+	}
+	return nil
+}
+
+func validateHTTPURL(name, raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("%s: %w", name, err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("%s: scheme %q, want http or https", name, u.Scheme)
+	}
+	if u.Host == "" {
+		return fmt.Errorf("%s: missing host", name)
 	}
 	return nil
 }

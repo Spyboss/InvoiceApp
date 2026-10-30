@@ -122,6 +122,21 @@ article.wide {
 	background: var(--pico-code-background-color);
 }
 
+.muted {
+	color: var(--pico-muted-color);
+}
+
+.quote-summary {
+	border: 1px solid var(--pico-muted-border-color);
+	border-radius: 0.25rem;
+	padding: 0.75rem 1rem;
+	margin-bottom: 1rem;
+}
+
+.quote-summary p {
+	margin: 0;
+}
+
 details summary {
 	cursor: pointer;
 	margin-block: 1rem 0.25rem;
