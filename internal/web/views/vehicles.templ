@@ -1,0 +1,324 @@
+package views
+
+// VehicleRow is one line of the vehicle list or the stock screen.
+type VehicleRow struct {
+	ID        string
+	StockNo   string
+	Make      string
+	Model     string
+	ChassisNo string
+	Colour    string
+	Status    string
+	Price     string
+	Received  string
+}
+
+type VehiclesData struct {
+	TenantName string
+	UserName   string
+	Nav        []NavLink
+	Query      string
+	Status     string
+	CanWrite   bool
+	Rows       []VehicleRow
+}
+
+templ Vehicles(d VehiclesData) {
+	@Layout("Vehicles", d.TenantName, d.UserName, d.Nav, vehiclesBody(d))
+}
+
+templ vehiclesBody(d VehiclesData) {
+	<article class="wide">
+		<header>
+			<h1>Vehicles</h1>
+			<form method="get" action="/vehicles" class="search">
+				<select name="status" aria-label="Status">
+					<option value="" selected?={ d.Status == "" }>All statuses</option>
+					<option value="AVAILABLE" selected?={ d.Status == "AVAILABLE" }>Available</option>
+					<option value="RESERVED" selected?={ d.Status == "RESERVED" }>Reserved</option>
+				</select>
+				<input type="search" name="q" value={ d.Query } placeholder="Model, chassis, stock no" aria-label="Search vehicles"/>
+				<button type="submit" class="secondary">Filter</button>
+			</form>
+		</header>
+
+		if d.CanWrite {
+			<p><a role="button" href="/vehicles/new">Add vehicle</a></p>
+		}
+
+		if len(d.Rows) == 0 {
+			<p class="muted">No vehicles match.</p>
+		} else {
+			<div class="table-scroll">
+				<table>
+					<thead>
+						<tr>
+							<th scope="col">Stock no</th>
+							<th scope="col">Model</th>
+							<th scope="col">Chassis</th>
+							<th scope="col">Colour</th>
+							<th scope="col">Status</th>
+							<th scope="col">Price (Rs)</th>
+							<th scope="col">Received</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, row := range d.Rows {
+							<tr>
+								<td><a href={ "/vehicles/" + row.ID }>{ orDash(row.StockNo) }</a></td>
+								<td>{ row.Make } { row.Model }</td>
+								<td><code>{ row.ChassisNo }</code></td>
+								<td>{ orDash(row.Colour) }</td>
+								<td><span class="status">{ row.Status }</span></td>
+								<td>{ row.Price }</td>
+								<td>{ row.Received }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	</article>
+}
+
+// VehicleFields is the editable part of a unit, shared by the form and the
+// detail page.
+type VehicleFields struct {
+	StockNo    string
+	Make       string
+	Model      string
+	Variant    string
+	ChassisNo  string
+	EngineNo   string
+	Colour     string
+	YOM        string
+	Cost       string
+	Price      string
+	ReceivedAt string
+	Notes      string
+}
+
+type VehicleFormData struct {
+	TenantName string
+	UserName   string
+	Nav        []NavLink
+	CSRFToken  string
+	Action     string
+	Heading    string
+	Submit     string
+	Cancel     string
+	Fields     VehicleFields
+	Error      string
+}
+
+templ VehicleForm(d VehicleFormData) {
+	@Layout(d.Heading, d.TenantName, d.UserName, d.Nav, vehicleFormBody(d))
+}
+
+templ vehicleFormBody(d VehicleFormData) {
+	<article class="wide">
+		<header>
+			<h1>{ d.Heading }</h1>
+			<p class="muted">Cost and price are what the owner and manager use. Sales cannot see this screen.</p>
+		</header>
+
+		if d.Error != "" {
+			<p role="alert">{ d.Error }</p>
+		}
+
+		<form method="post" action={ d.Action }>
+			<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
+			<div class="grid">
+				<label>
+					Stock no
+					<input type="text" name="stock_no" value={ d.Fields.StockNo } maxlength="40"/>
+				</label>
+				<label>
+					Received
+					<input type="date" name="received_at" value={ d.Fields.ReceivedAt }/>
+				</label>
+			</div>
+			<div class="grid">
+				<label>
+					Make
+					<input type="text" name="make" value={ d.Fields.Make } maxlength="80" required/>
+				</label>
+				<label>
+					Model
+					<input type="text" name="model" value={ d.Fields.Model } maxlength="80" required autofocus/>
+				</label>
+			</div>
+			<div class="grid">
+				<label>
+					Variant
+					<input type="text" name="variant" value={ d.Fields.Variant } maxlength="80"/>
+				</label>
+				<label>
+					Colour
+					<input type="text" name="colour" value={ d.Fields.Colour } maxlength="40"/>
+				</label>
+			</div>
+			<div class="grid">
+				<label>
+					Chassis number
+					<input type="text" name="chassis_no" value={ d.Fields.ChassisNo } minlength="5" maxlength="40" required/>
+				</label>
+				<label>
+					Engine number
+					<input type="text" name="engine_no" value={ d.Fields.EngineNo } maxlength="40"/>
+				</label>
+			</div>
+			<div class="grid">
+				<label>
+					Year of manufacture
+					<input type="number" name="yom" value={ d.Fields.YOM } min="1990" max="2100"/>
+				</label>
+				<label>
+					Price (Rs)
+					<input type="text" name="price" value={ d.Fields.Price } inputmode="decimal" placeholder="0.00"/>
+				</label>
+			</div>
+			<label>
+				Cost (Rs)
+				<input type="text" name="cost" value={ d.Fields.Cost } inputmode="decimal" placeholder="0.00"/>
+				<small>What the dealership paid. Only owner and manager can see or set this.</small>
+			</label>
+			<label>
+				Notes
+				<textarea name="notes" rows="2" maxlength="2000">{ d.Fields.Notes }</textarea>
+			</label>
+			<div class="actions">
+				<button type="submit">{ d.Submit }</button>
+				<a href={ d.Cancel } role="button" class="secondary">Cancel</a>
+			</div>
+		</form>
+	</article>
+}
+
+type VehicleDetailData struct {
+	TenantName string
+	UserName   string
+	Nav        []NavLink
+	CSRFToken  string
+	ID         string
+	Fields     VehicleFields
+	Status     string
+	Saved      bool
+	CanWrite   bool
+	CanMove    bool
+	Movements  []MovementRow
+}
+
+templ VehicleDetail(d VehicleDetailData) {
+	@Layout(d.Fields.Make+" "+d.Fields.Model, d.TenantName, d.UserName, d.Nav, vehicleDetailBody(d))
+}
+
+templ vehicleDetailBody(d VehicleDetailData) {
+	<article class="wide">
+		<header>
+			<h1>{ d.Fields.Make } { d.Fields.Model }</h1>
+			<p><span class="status">{ d.Status }</span></p>
+			if d.Saved {
+				<p role="status">Saved.</p>
+			}
+		</header>
+
+		<dl class="facts">
+			<dt>Stock no</dt>
+			<dd>{ orDash(d.Fields.StockNo) }</dd>
+			<dt>Variant</dt>
+			<dd>{ orDash(d.Fields.Variant) }</dd>
+			<dt>Chassis</dt>
+			<dd><code>{ d.Fields.ChassisNo }</code></dd>
+			<dt>Engine</dt>
+			<dd>{ orDash(d.Fields.EngineNo) }</dd>
+			<dt>Colour</dt>
+			<dd>{ orDash(d.Fields.Colour) }</dd>
+			<dt>Year</dt>
+			<dd>{ orDash(d.Fields.YOM) }</dd>
+			<dt>Price</dt>
+			<dd>Rs { d.Fields.Price }</dd>
+			if d.CanWrite {
+				<dt>Cost</dt>
+				<dd>Rs { d.Fields.Cost }</dd>
+			}
+			<dt>Received</dt>
+			<dd>{ d.Fields.ReceivedAt }</dd>
+			<dt>Notes</dt>
+			<dd>{ orDash(d.Fields.Notes) }</dd>
+		</dl>
+
+		if d.CanMove {
+			if d.Status == "AVAILABLE" {
+				<form method="post" action={ "/vehicles/" + d.ID + "/status" }>
+					<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
+					<input type="hidden" name="status" value="RESERVED"/>
+					<label>
+						Reserve for a buyer
+						<input type="text" name="note" maxlength="200" placeholder="Buyer name, advance, and so on"/>
+					</label>
+					<button type="submit">Reserve</button>
+				</form>
+			}
+			if d.Status == "RESERVED" {
+				<form method="post" action={ "/vehicles/" + d.ID + "/status" }>
+					<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
+					<input type="hidden" name="status" value="AVAILABLE"/>
+					<label>
+						Release the reservation
+						<input type="text" name="note" maxlength="200" placeholder="Why the buyer walked away"/>
+					</label>
+					<button type="submit" class="secondary">Release</button>
+				</form>
+			}
+		}
+
+		<footer>
+			<div class="actions">
+				<a href="/vehicles" role="button" class="secondary">Back to vehicles</a>
+				if d.CanWrite {
+					<a href={ "/vehicles/" + d.ID + "/edit" } role="button">Edit</a>
+				}
+			</div>
+		</footer>
+
+		<h2>History</h2>
+		@MovementsTable(d.Movements)
+	</article>
+}
+
+// MovementsTable is shared by the vehicle page and the stock screen.
+templ MovementsTable(rows []MovementRow) {
+	if len(rows) == 0 {
+		<p class="muted">No stock movements yet.</p>
+	} else {
+		<div class="table-scroll">
+			<table>
+				<thead>
+					<tr>
+						<th scope="col">When (UTC)</th>
+						<th scope="col">Kind</th>
+						<th scope="col">Delta</th>
+						<th scope="col">Vehicle</th>
+						<th scope="col">Status</th>
+						<th scope="col">By</th>
+						<th scope="col">Note</th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, row := range rows {
+						<tr>
+							<td>{ row.At }</td>
+							<td><code>{ row.Kind }</code></td>
+							<td>{ row.Delta }</td>
+							<td>{ row.Vehicle }</td>
+							<td>{ row.From } → { row.To }</td>
+							<td>{ row.Actor }</td>
+							<td>{ orDash(row.Note) }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	}
+}

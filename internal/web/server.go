@@ -65,6 +65,25 @@ func New(d Deps) http.Handler {
 	mux.Handle("POST /logout", s.logoutSubmit())
 	mux.Handle("GET /{$}", s.requireUser(s.homePage()))
 	mux.Handle("GET /audit", s.requirePermission("audit.view", s.auditPage()))
+
+	mux.Handle("GET /customers", s.requirePermission("customer.read", s.customersPage()))
+	mux.Handle("GET /customers/new", s.requirePermission("customer.write", s.customerNewPage()))
+	mux.Handle("POST /customers", s.requirePermission("customer.write", s.customerCreate()))
+	mux.Handle("GET /customers/{id}", s.requirePermission("customer.read", s.customerPage()))
+	mux.Handle("GET /customers/{id}/edit", s.requirePermission("customer.write", s.customerEditPage()))
+	mux.Handle("POST /customers/{id}", s.requirePermission("customer.write", s.customerUpdate()))
+	mux.Handle("POST /customers/{id}/delete", s.requirePermission("customer.write", s.customerDelete()))
+
+	mux.Handle("GET /vehicles", s.requirePermission("vehicle.read", s.vehiclesPage()))
+	mux.Handle("GET /vehicles/new", s.requirePermission("vehicle.write", s.vehicleNewPage()))
+	mux.Handle("POST /vehicles", s.requirePermission("vehicle.write", s.vehicleCreate()))
+	mux.Handle("GET /vehicles/{id}", s.requirePermission("vehicle.read", s.vehiclePage()))
+	mux.Handle("GET /vehicles/{id}/edit", s.requirePermission("vehicle.write", s.vehicleEditPage()))
+	mux.Handle("POST /vehicles/{id}", s.requirePermission("vehicle.write", s.vehicleUpdate()))
+	mux.Handle("POST /vehicles/{id}/status", s.requirePermission("stock.write", s.vehicleStatusSubmit()))
+
+	mux.Handle("GET /stock", s.requirePermission("stock.read", s.stockPage()))
+
 	mux.Handle("/", s.notFound())
 
 	return httpx.Chain(mux,

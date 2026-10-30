@@ -5,6 +5,7 @@ import "time"
 type HomeData struct {
 	TenantName  string
 	UserName    string
+	Nav         []NavLink
 	Email       string
 	Role        string
 	Permissions []string
@@ -14,7 +15,7 @@ type HomeData struct {
 }
 
 templ Home(d HomeData) {
-	@Layout("Home", d.TenantName, d.UserName, homeBody(d))
+	@Layout("Home", d.TenantName, d.UserName, d.Nav, homeBody(d))
 }
 
 templ homeBody(d HomeData) {

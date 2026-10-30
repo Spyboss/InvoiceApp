@@ -26,7 +26,7 @@ func Login(tenantName string, email string, message string, csrf string) templ.C
 		}
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = Layout("Sign in", tenantName, "", loginBody(email, message, csrf)).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = Layout("Sign in", tenantName, "", nil, loginBody(email, message, csrf)).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

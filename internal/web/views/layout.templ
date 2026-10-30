@@ -1,6 +1,16 @@
 package views
 
-templ Layout(title string, tenantName string, userName string, body templ.Component) {
+import "strings"
+
+// NavLink is one top level destination. Here marks the section the request is
+// in so the header can show it.
+type NavLink struct {
+	Href  string
+	Label string
+	Here  bool
+}
+
+templ Layout(title string, tenantName string, userName string, nav []NavLink, body templ.Component) {
 	<!DOCTYPE html>
 	<html lang="en">
 		<head>
@@ -13,7 +23,14 @@ templ Layout(title string, tenantName string, userName string, body templ.Compon
 		</head>
 		<body>
 			<header class="container site-header">
-				<span class="brand">{ tenantName }</span>
+				<a class="brand" href="/">{ tenantName }</a>
+				if len(nav) > 0 {
+					<nav class="site-nav">
+						for _, link := range nav {
+							<a href={ link.Href } class={ navClass(link) }>{ link.Label }</a>
+						}
+					</nav>
+				}
 				if userName != "" {
 					<span class="who">{ userName }</span>
 				}
@@ -23,4 +40,18 @@ templ Layout(title string, tenantName string, userName string, body templ.Compon
 			</main>
 		</body>
 	</html>
+}
+
+func navClass(link NavLink) string {
+	if link.Here {
+		return "here"
+	}
+	return ""
+}
+
+func orDash(s string) string {
+	if strings.TrimSpace(s) == "" {
+		return "—"
+	}
+	return s
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/spyboss/invoiceapp/internal/db"
+	"github.com/spyboss/invoiceapp/internal/db/dbtest"
 	"github.com/spyboss/invoiceapp/internal/store"
 )
 
@@ -28,7 +29,11 @@ func TestMain(m *testing.M) {
 
 	ctx := context.Background()
 
-	var err error
+	release, err := dbtest.Lock(ctx, dsn)
+	if err != nil {
+		panic(err)
+	}
+
 	admin, err = db.OpenAdmin(ctx, dsn)
 	if err != nil {
 		panic(err)
@@ -45,6 +50,7 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 	runtime.Close()
 	admin.Close()
+	release()
 	os.Exit(code)
 }
 

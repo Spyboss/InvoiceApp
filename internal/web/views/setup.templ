@@ -2,9 +2,9 @@ package views
 
 templ Setup(bootstrap bool, tenantName string, dealership string, name string, email string, message string, csrf string) {
 	if bootstrap {
-		@Layout("Set up", "New installation", "", setupBody(true, tenantName, dealership, name, email, message, csrf))
+		@Layout("Set up", "New installation", "", nil, setupBody(true, tenantName, dealership, name, email, message, csrf))
 	} else {
-		@Layout("Set up", tenantName, "", setupBody(false, tenantName, dealership, name, email, message, csrf))
+		@Layout("Set up", tenantName, "", nil, setupBody(false, tenantName, dealership, name, email, message, csrf))
 	}
 }
 

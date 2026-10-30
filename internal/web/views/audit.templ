@@ -13,12 +13,13 @@ type AuditRow struct {
 type AuditData struct {
 	TenantName string
 	UserName   string
+	Nav        []NavLink
 	CSRFToken  string
 	Rows       []AuditRow
 }
 
 templ Audit(d AuditData) {
-	@Layout("Audit log", d.TenantName, d.UserName, auditBody(d))
+	@Layout("Audit log", d.TenantName, d.UserName, d.Nav, auditBody(d))
 }
 
 templ auditBody(d AuditData) {

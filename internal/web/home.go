@@ -30,6 +30,7 @@ func (s *Server) homePage() http.HandlerFunc {
 		s.render(w, r, http.StatusOK, views.Home(views.HomeData{
 			TenantName:  t.Name,
 			UserName:    u.User.Name,
+			Nav:         navLinks(r.Context(), r.URL.Path),
 			Email:       u.User.Email,
 			Role:        u.User.Role,
 			Permissions: permissions,
@@ -79,6 +80,7 @@ func (s *Server) auditPage() http.HandlerFunc {
 		s.render(w, r, http.StatusOK, views.Audit(views.AuditData{
 			TenantName: t.Name,
 			UserName:   u.User.Name,
+			Nav:        navLinks(r.Context(), r.URL.Path),
 			CSRFToken:  csrfToken(r.Context()),
 			Rows:       rows,
 		}))

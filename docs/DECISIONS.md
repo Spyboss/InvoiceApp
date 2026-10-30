@@ -187,3 +187,21 @@ rules:
 **why** an open signup screen on a public hostname is free resource use and a support burden. selling to other dealers (v2) needs billing and an admin console, which is a different feature with its own step.
 
 **cost** onboarding a second dealer today needs one database insert. acceptable until v2.
+
+## D19 - the stock ledger, and who may set vehicle money
+
+**date** 2026-10-30 · **status** accepted
+
+**context** step 3 introduces vehicles and stock. the live app keeps stock in one editable sheet, so a unit can be sold without anything recording that it left the yard, and a sold unit can be typed back to available.
+
+**decision**
+
+- `stock_movements` is append only: `RECEIVE (+1)` on intake, `SELL (-1)` when an invoice takes the unit, `RETURN (+1)` when a sold unit comes back. `app_rw` may insert and select only; update and delete are revoked, the same as the audit log.
+- a `before insert` trigger takes a per vehicle advisory lock and refuses any row that would take that vehicle's running total outside {0,1}. the invariant belongs to the database, not to one go query, so no future code path can sell one unit twice or receive it twice.
+- reserve and release are vehicle status changes, not ledger rows: the unit never left the yard. both are audited (`stock.reserve`, `stock.release`) with the reason typed by the clerk.
+- on hand is `AVAILABLE + RESERVED + RETURNED`, because a returned unit is physically here waiting for inspection. the stock screen compares that with the ledger total and warns when the two disagree.
+- intake and edit carry cost and price, so they require `vehicle.write`, held by OWNER and MANAGER only. SALES holds `customer.write`, `vehicle.read`, `stock.read` and `stock.write`: a salesperson can add a customer and reserve or release a unit, but cannot see or set what the dealership paid.
+
+**why** stock is the second place a dealership is cheated: a unit leaves the yard and the books never say so. a database invariant survives refactors. hiding cost from sales is the smallest permission split that keeps the margin private while the counter keeps working.
+
+**cost** a damaged or written off unit has no movement kind yet; it needs its own entry when the business asks for it. until then the only way a unit leaves the yard is a sale.

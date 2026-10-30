@@ -18,6 +18,7 @@ import (
 
 	"github.com/spyboss/invoiceapp/internal/auth"
 	"github.com/spyboss/invoiceapp/internal/db"
+	"github.com/spyboss/invoiceapp/internal/db/dbtest"
 	"github.com/spyboss/invoiceapp/internal/store"
 	"github.com/spyboss/invoiceapp/internal/tenant"
 )
@@ -29,10 +30,16 @@ var (
 
 func TestMain(m *testing.M) {
 	dsn := os.Getenv("TEST_DATABASE_URL")
+	var release func()
 	if dsn != "" {
 		ctx := context.Background()
 
 		var err error
+		release, err = dbtest.Lock(ctx, dsn)
+		if err != nil {
+			panic(err)
+		}
+
 		adminPool, err = db.OpenAdmin(ctx, dsn)
 		if err != nil {
 			panic(err)
@@ -52,6 +59,9 @@ func TestMain(m *testing.M) {
 
 	if adminPool != nil {
 		adminPool.Close()
+	}
+	if release != nil {
+		release()
 	}
 	os.Exit(code)
 }

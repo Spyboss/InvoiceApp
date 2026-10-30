@@ -1,7 +1,7 @@
 package views
 
 templ Login(tenantName string, email string, message string, csrf string) {
-	@Layout("Sign in", tenantName, "", loginBody(email, message, csrf))
+	@Layout("Sign in", tenantName, "", nil, loginBody(email, message, csrf))
 }
 
 templ loginBody(email string, message string, csrf string) {

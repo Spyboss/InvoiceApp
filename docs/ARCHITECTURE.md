@@ -26,13 +26,14 @@ internal/
   db/                  pgx pools (admin + app_rw), pool tuning
   db/migrations/       embedded append-only *.sql, applied at boot
   store/               every sql statement in the app (pgx, one file per aggregate)
+  db/dbtest/           test only: keeps the integration test binaries off each other's rows
   auth/                password hashing, sessions, csrf, permissions, lockout
   tenant/              host -> tenant resolution, cache, request context
   audit/               append-only write log
   money/               cents parsing/formatting
   numbering/           atomic series allocation
   documents/           invoice, quotation, proforma, receipt domain logic
-  stock/               vehicles + movement ledger
+  stock/               status transitions shared by stock and sales (step 4, when one transaction must change status, ledger and invoice)
   payments/            receipts, allocation, reversal
   reports/             day end, sales, stock, receivables
   pdf/                 html templates -> gotenberg client -> archive
@@ -60,7 +61,7 @@ anything that writes must be one transaction that includes its audit row.
 
 - postgres 18, `uuidv7()` primary keys, `bigint` cents, `timestamptz`.
 - every business table: `tenant_id`, `created_at`, `created_by`, `updated_at`, `deleted_at`.
-- composite unique indexes always include `tenant_id` (e.g. `(tenant_id, chassis_no)`).
+- composite unique indexes always include `tenant_id` (e.g. `(tenant_id, upper(chassis_no))`, so a typed lower case letter cannot slip a duplicate past it).
 - rls enabled and forced on every tenant table: `tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid`. forced means the table owner is not exempt either.
 - migrations via `internal/db/migrate.go`, embedded, forward only, one file per step, applied at boot under an advisory lock. an applied file is never edited.
 - queries hand written pgx in `internal/store`. no orm, no string-built sql, no query builder.

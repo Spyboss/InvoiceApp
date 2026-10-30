@@ -27,12 +27,12 @@ func Setup(bootstrap bool, tenantName string, dealership string, name string, em
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
 		if bootstrap {
-			templ_7745c5c3_Err = Layout("Set up", "New installation", "", setupBody(true, tenantName, dealership, name, email, message, csrf)).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = Layout("Set up", "New installation", "", nil, setupBody(true, tenantName, dealership, name, email, message, csrf)).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = Layout("Set up", tenantName, "", setupBody(false, tenantName, dealership, name, email, message, csrf)).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = Layout("Set up", tenantName, "", nil, setupBody(false, tenantName, dealership, name, email, message, csrf)).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

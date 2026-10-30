@@ -12,10 +12,28 @@
 	display: flex;
 	align-items: baseline;
 	justify-content: space-between;
-	gap: 1rem;
+	flex-wrap: wrap;
+	gap: 0.5rem 1rem;
 	padding-block: 1rem;
 	border-bottom: 1px solid var(--pico-muted-border-color);
 	margin-bottom: 1.5rem;
+}
+
+.site-nav {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.25rem 0.9rem;
+	font-size: 0.95rem;
+}
+
+.site-nav a {
+	color: var(--pico-muted-color);
+	text-decoration: none;
+}
+
+.site-nav a.here {
+	color: var(--pico-primary);
+	font-weight: 700;
 }
 
 .site-header .brand {
@@ -70,6 +88,43 @@ article.wide {
 
 .table-scroll {
 	overflow-x: auto;
+}
+
+.search {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	align-items: end;
+}
+
+.search select,
+.search input {
+	margin-bottom: 0;
+	width: auto;
+	flex: 1 1 10rem;
+}
+
+.actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	align-items: center;
+	margin-block: 0.5rem;
+}
+
+.status {
+	display: inline-block;
+	font-size: 0.78rem;
+	font-weight: 700;
+	letter-spacing: 0.02em;
+	padding: 0.1rem 0.45rem;
+	border-radius: 0.25rem;
+	background: var(--pico-code-background-color);
+}
+
+details summary {
+	cursor: pointer;
+	margin-block: 1rem 0.25rem;
 }
 
 table {

@@ -1,0 +1,107 @@
+package views
+
+// MovementRow is one formatted ledger line.
+type MovementRow struct {
+	At      string
+	Kind    string
+	Delta   string
+	Vehicle string
+	From    string
+	To      string
+	Actor   string
+	Note    string
+}
+
+// StockTotals is the yard summary as shown, already formatted.
+type StockTotals struct {
+	Available int
+	Reserved  int
+	Sold      int
+	Delivered int
+	Returned  int
+	OnHand    int
+	Ledger    int
+}
+
+type StockData struct {
+	TenantName string
+	UserName   string
+	Nav        []NavLink
+	Totals     StockTotals
+	Balanced   bool
+	Vehicles   []VehicleRow
+	Movements  []MovementRow
+}
+
+templ Stock(d StockData) {
+	@Layout("Stock", d.TenantName, d.UserName, d.Nav, stockBody(d))
+}
+
+templ stockBody(d StockData) {
+	<article class="wide">
+		<header>
+			<h1>Stock</h1>
+			<p class="muted">One row per physical unit. The ledger is append only and cannot be edited.</p>
+		</header>
+
+		if !d.Balanced {
+			<p role="alert">The ledger and the yard count disagree. Do not sell from this list until someone checks the stock movements.</p>
+		}
+
+		<dl class="facts">
+			<dt>On hand</dt>
+			<dd><strong>{ d.Totals.OnHand }</strong> units</dd>
+			<dt>Available</dt>
+			<dd>{ d.Totals.Available }</dd>
+			<dt>Reserved</dt>
+			<dd>{ d.Totals.Reserved }</dd>
+			if d.Totals.Sold > 0 {
+				<dt>Sold</dt>
+				<dd>{ d.Totals.Sold }</dd>
+			}
+			if d.Totals.Delivered > 0 {
+				<dt>Delivered</dt>
+				<dd>{ d.Totals.Delivered }</dd>
+			}
+			if d.Totals.Returned > 0 {
+				<dt>Returned</dt>
+				<dd>{ d.Totals.Returned }</dd>
+			}
+			<dt>Ledger total</dt>
+			<dd>{ d.Totals.Ledger } units received, minus sold</dd>
+		</dl>
+
+		<h2>In the yard</h2>
+		if len(d.Vehicles) == 0 {
+			<p class="muted">Nothing in stock.</p>
+		} else {
+			<div class="table-scroll">
+				<table>
+					<thead>
+						<tr>
+							<th scope="col">Stock no</th>
+							<th scope="col">Vehicle</th>
+							<th scope="col">Chassis</th>
+							<th scope="col">Status</th>
+							<th scope="col">Received</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, row := range d.Vehicles {
+							<tr>
+								<td><a href={ "/vehicles/" + row.ID }>{ orDash(row.StockNo) }</a></td>
+								<td>{ row.Make } { row.Model }</td>
+								<td><code>{ row.ChassisNo }</code></td>
+								<td><span class="status">{ row.Status }</span></td>
+								<td>{ row.Received }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+
+		<h2>Recent movements</h2>
+		@MovementsTable(d.Movements)
+	</article>
+}

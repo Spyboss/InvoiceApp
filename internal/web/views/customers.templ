@@ -1,0 +1,219 @@
+package views
+
+// CustomerRow is one line of the customer list.
+type CustomerRow struct {
+	ID      string
+	Name    string
+	NIC     string
+	Phone   string
+	Address string
+}
+
+type CustomersData struct {
+	TenantName string
+	UserName   string
+	Nav        []NavLink
+	Query      string
+	CanWrite   bool
+	Rows       []CustomerRow
+}
+
+templ Customers(d CustomersData) {
+	@Layout("Customers", d.TenantName, d.UserName, d.Nav, customersBody(d))
+}
+
+templ customersBody(d CustomersData) {
+	<article class="wide">
+		<header>
+			<h1>Customers</h1>
+			<form method="get" action="/customers" class="search">
+				<input type="search" name="q" value={ d.Query } placeholder="Name, phone or NIC" aria-label="Search customers"/>
+				<button type="submit" class="secondary">Search</button>
+			</form>
+		</header>
+
+		if d.CanWrite {
+			<p><a role="button" href="/customers/new">Add customer</a></p>
+		}
+
+		if len(d.Rows) == 0 {
+			<p class="muted">No customers match.</p>
+		} else {
+			<div class="table-scroll">
+				<table>
+					<thead>
+						<tr>
+							<th scope="col">Name</th>
+							<th scope="col">NIC</th>
+							<th scope="col">Phone</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, row := range d.Rows {
+							<tr>
+								<td><a href={ "/customers/" + row.ID }>{ row.Name }</a></td>
+								<td>{ orDash(row.NIC) }</td>
+								<td>{ orDash(row.Phone) }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	</article>
+}
+
+// CustomerFields is the editable part, shared by the form and the detail page.
+type CustomerFields struct {
+	Name            string
+	NIC             string
+	Phone           string
+	Phone2          string
+	Email           string
+	Address         string
+	DeliveryAddress string
+	Notes           string
+}
+
+type CustomerFormData struct {
+	TenantName string
+	UserName   string
+	Nav        []NavLink
+	CSRFToken  string
+	Action     string
+	Heading    string
+	Submit     string
+	Cancel     string
+	Fields     CustomerFields
+	Error      string
+}
+
+templ CustomerForm(d CustomerFormData) {
+	@Layout(d.Heading, d.TenantName, d.UserName, d.Nav, customerFormBody(d))
+}
+
+templ customerFormBody(d CustomerFormData) {
+	<article class="wide">
+		<header>
+			<h1>{ d.Heading }</h1>
+		</header>
+
+		if d.Error != "" {
+			<p role="alert">{ d.Error }</p>
+		}
+
+		<form method="post" action={ d.Action }>
+			<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
+			<div class="grid">
+				<label>
+					Name
+					<input type="text" name="name" value={ d.Fields.Name } maxlength="120" required autofocus/>
+				</label>
+				<label>
+					NIC
+					<input type="text" name="nic" value={ d.Fields.NIC } maxlength="20"/>
+				</label>
+			</div>
+			<div class="grid">
+				<label>
+					Phone
+					<input type="tel" name="phone" value={ d.Fields.Phone } maxlength="20"/>
+				</label>
+				<label>
+					Other phone
+					<input type="tel" name="phone2" value={ d.Fields.Phone2 } maxlength="20"/>
+				</label>
+			</div>
+			<label>
+				Email
+				<input type="email" name="email" value={ d.Fields.Email }/>
+			</label>
+			<label>
+				Address
+				<textarea name="address" rows="2" maxlength="500">{ d.Fields.Address }</textarea>
+			</label>
+			<label>
+				Delivery address
+				<textarea name="delivery_address" rows="2" maxlength="500">{ d.Fields.DeliveryAddress }</textarea>
+			</label>
+			<label>
+				Notes
+				<textarea name="notes" rows="2" maxlength="2000">{ d.Fields.Notes }</textarea>
+			</label>
+			<div class="actions">
+				<button type="submit">{ d.Submit }</button>
+				<a href={ d.Cancel } role="button" class="secondary">Cancel</a>
+			</div>
+		</form>
+	</article>
+}
+
+type CustomerDetailData struct {
+	TenantName string
+	UserName   string
+	Nav        []NavLink
+	CSRFToken  string
+	ID         string
+	Fields     CustomerFields
+	Saved      bool
+	CanWrite   bool
+	Created    string
+}
+
+templ CustomerDetail(d CustomerDetailData) {
+	@Layout(d.Fields.Name, d.TenantName, d.UserName, d.Nav, customerDetailBody(d))
+}
+
+templ customerDetailBody(d CustomerDetailData) {
+	<article class="wide">
+		<header>
+			<h1>{ d.Fields.Name }</h1>
+			if d.Saved {
+				<p role="status">Saved.</p>
+			}
+		</header>
+
+		<dl class="facts">
+			<dt>NIC</dt>
+			<dd>{ orDash(d.Fields.NIC) }</dd>
+			<dt>Phone</dt>
+			<dd>{ orDash(d.Fields.Phone) }</dd>
+			<dt>Other phone</dt>
+			<dd>{ orDash(d.Fields.Phone2) }</dd>
+			<dt>Email</dt>
+			<dd>{ orDash(d.Fields.Email) }</dd>
+			<dt>Address</dt>
+			<dd>{ orDash(d.Fields.Address) }</dd>
+			<dt>Delivery address</dt>
+			<dd>{ orDash(d.Fields.DeliveryAddress) }</dd>
+			<dt>Notes</dt>
+			<dd>{ orDash(d.Fields.Notes) }</dd>
+			<dt>Added</dt>
+			<dd>{ d.Created }</dd>
+		</dl>
+
+		<footer>
+			<div class="actions">
+				<a href="/customers" role="button" class="secondary">Back to customers</a>
+				if d.CanWrite {
+					<a href={ "/customers/" + d.ID + "/edit" } role="button">Edit</a>
+				}
+			</div>
+
+			if d.CanWrite {
+				<details>
+					<summary>Remove this customer</summary>
+					<p class="muted">The customer disappears from lists. The record and its history stay.</p>
+					<form method="post" action={ "/customers/" + d.ID + "/delete" }>
+						<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
+						<label>
+							Reason
+							<input type="text" name="reason" maxlength="200" placeholder="Duplicate entry, moved away, and so on"/>
+						</label>
+						<button type="submit" class="secondary">Remove customer</button>
+					</form>
+				</details>
+			}
+		</footer>
+	</article>
+}
