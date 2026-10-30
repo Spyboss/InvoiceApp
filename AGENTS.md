@@ -54,6 +54,6 @@ step 4 done: `/documents` issues quotations, cash and leasing invoices, advance 
 
 ## reference material
 
-- `C:\Users\Gunawardana Motors\Downloads\BIBILE 01.docx` — the leasing company's proforma, ground truth for the proforma pdf (copy into `internal/pdf/testdata/` at step 4).
+- `C:\Users\Gunawardana Motors\Downloads\BIBILE 01.docx` — the leasing company's proforma, ground truth for the proforma pdf. kept out of the repo because it carries a customer's nic and phone; the geometry and extracted assets are in `internal/pdf/`.
 - `web_app.py` — the live behaviour being replaced (read only, do not change).
 - `feat/erp-ts` — earlier attempt; useful for the drizzle schema shape, the transaction guards, and the derived proforma geometry.

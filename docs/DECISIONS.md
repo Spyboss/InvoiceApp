@@ -248,4 +248,4 @@ rules:
 
 **why** a number is the identity of a sale; a duplicate or a gap is a fraud signal before it is a bug. snapshots and the update trigger mean the paper cannot be rewritten after the customer leaves. storing the first print is cheaper than proving a regenerated one is byte identical.
 
-**cost** pdf bytes live in postgres until r2; around 60kb per invoice is fine at this volume, and moving later is a copy plus a reader change. one more railway service to keep alive, and a network dependency at the first print; afterwards the archive serves. the proforma is tied to singer paper until another letterhead is supplied.
+**cost** pdf bytes live in postgres until r2; around 60kb per invoice is fine at this volume, and moving later is a copy plus a reader change. one more railway service to keep alive, and a network dependency at the first print; afterwards the archive serves. the proforma is tied to singer paper until another letterhead is supplied. the sample `BIBILE 01.docx` stays out of the public repo because it carries a customer's nic and phone; its geometry and extracted assets live in `internal/pdf`.

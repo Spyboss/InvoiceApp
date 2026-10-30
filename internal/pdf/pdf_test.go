@@ -23,16 +23,16 @@ func sampleProforma() store.Document {
 		DocNo:            "0001",
 		DocDate:          time.Date(2026, 10, 21, 0, 0, 0, 0, time.UTC),
 		Status:           store.DocIssued,
-		CustomerName:     "MS P.B SEWWANDI",
-		CustomerNIC:      "200666602786",
-		CustomerPhone:    "0788585327",
-		CustomerAddress:  "Mahiyanganaya",
+		CustomerName:     "A B PERERA",
+		CustomerNIC:      "199000000000",
+		CustomerPhone:    "0770000000",
+		CustomerAddress:  "Colombo",
 		VehicleMake:      "TAILG",
 		VehicleModel:     "F55",
 		VehicleType:      "ELECTRIC",
 		VehicleColour:    "RED",
-		VehicleEngineNo:  "TLLMEVTF5100479",
-		VehicleChassisNo: "LGMMVU1K1T0002970",
+		VehicleEngineNo:  "ENG0000000001",
+		VehicleChassisNo: "CHS0000000000001",
 		VehicleYOM:       &yom,
 		FinanceCompany:   "SINGER FINANCE",
 		FinanceAddress:   "MAHIYANAGNAYA",
@@ -49,17 +49,17 @@ func TestProformaCarriesEveryFieldFromTheSample(t *testing.T) {
 		"PROFORMA INVOICE",
 		"Proforma Invoice. No.  0001",
 		"DATE:         21/10/2026",
-		"Customer Name     - MS P.B SEWWANDI",
-		"Customer NIC- 200666602786",
-		"Contact no     - 0788585327",
+		"Customer Name     - A B PERERA",
+		"Customer NIC- 199000000000",
+		"Contact no     - 0770000000",
 		"Leasing company- SINGER FINANCE",
 		"Address- MAHIYANAGNAYA",
 		"MAKE                      - TAILG",
 		"MODEL                    - F55",
 		"TYPE                       - ELECTRIC",
 		"COLOUR                  - RED",
-		"EN/MOTOR NO       - TLLMEVTF5100479",
-		"LGMMVU1K1T0002970",
+		"EN/MOTOR NO       - ENG0000000001",
+		"CHS0000000000001",
 		"YOM                      - 2026",
 		"Selling price         - LKR 980000/-",
 		"Cash Advance      -LKR 430000/-",
@@ -154,7 +154,7 @@ func TestDealerDocuments(t *testing.T) {
 	lease.DownCents = 25000000
 	lease.BalanceCents = 100000000
 	lease.FinanceCompany = "SINGER FINANCE"
-	lease.FinanceAddress = "Mahiyanganaya"
+	lease.FinanceAddress = "Colombo"
 	html = dealerHTML("Gunawardana Enterprises", lease)
 	for _, want := range []string{"SALES INVOICE", "SINGER FINANCE", "payable by the finance company", "Cash advance"} {
 		if !strings.Contains(html, want) {
