@@ -87,7 +87,7 @@ argon2id (owasp params), server-side sessions table (`token_hash`, user, ip, use
 - app variables: `APP_ENV=staging`, `LOG_LEVEL=info`, `DATABASE_URL=<neon direct endpoint, sslmode=require>`, `RAILWAY_DEPLOYMENT_DRAINING_SECONDS=30`.
 - staging url `https://app-staging-895f.up.railway.app`.
 - database: neon project `invoiceapp` id `blue-hat-64568041`, org `Uminda` (`org-nameless-unit-86171587`), `aws-ap-southeast-1`, postgres 18, database `invoiceapp`, owner role `invoiceapp_owner`. runtime role `app_rw` is created by migration 0001. connection is the **direct** endpoint (no `-pooler`) so migrations and advisory locks keep a session.
-- service `Postgres` id `1d936f7f-d551-47b5-9acb-b73d0dac6259` is decommissioned once staging on neon is verified. see D20.
+- service `Postgres` (id `1d936f7f-d551-47b5-9acb-b73d0dac6259`, volume `postgres-volume`) was deleted, volume included, on 2026-10-30 after the neon setup was verified from a signed in session. see D20.
 - `production` environment is created at cutover (step 8), not before. nothing here touches the streamlit app.
 
 ## 7. deploy
