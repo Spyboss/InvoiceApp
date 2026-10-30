@@ -11,7 +11,7 @@ browser ── https ──> cloudflare (dns, waf, tls)
                           │
                           ▼
                     railway: app (go, :8080)
-                          ├── postgres  (private network)
+                          ├── neon postgres (public, tls)
                           └── gotenberg (private network, chromium)
 ```
 
@@ -79,14 +79,15 @@ html template per document type, rendered by go, posted to gotenberg `/forms/chr
 
 argon2id (owasp params), server-side sessions table (`token_hash`, user, ip, user agent, idle and absolute expiry, revoked_at). cookie `__Host-session`, httpOnly, secure, samesite=lax. csrf token in a `__Host-csrf` cookie + hidden form field, compared constant time. login rate limited per ip and per account, lockout with backoff. totp for owner/manager. password reset by emailed single-use token (hash stored). every session is listable and revocable by the user and by the owner.
 
-## 6a. railway, as provisioned (2026-10-30)
+## 6a. railway + neon, as provisioned (2026-10-30)
 
 - project `invoiceapp` id `67312fd4-6f50-4025-a332-f9a46347686a`, workspace `waruni sandachaya's Projects`.
 - environment `staging` id `7cf9b3bb-d020-4af7-ac52-ed417f6f8fbf`, region singapore (`asia-southeast1`).
 - service `app` id `1b4d3976-2e56-4b81-ab8e-72697c62511d`, source `Spyboss/InvoiceApp` branch `rewrite/go-htmx`, dockerfile build.
-- service `Postgres` id `1d936f7f-d551-47b5-9acb-b73d0dac6259`, image `ghcr.io/railwayapp-templates/postgres-ssl:18`, volume 5gb at `/var/lib/postgresql/data`.
-- app variables: `APP_ENV=staging`, `LOG_LEVEL=info`, `DATABASE_URL=${{Postgres.DATABASE_URL}}`, `RAILWAY_DEPLOYMENT_DRAINING_SECONDS=30`.
+- app variables: `APP_ENV=staging`, `LOG_LEVEL=info`, `DATABASE_URL=<neon direct endpoint, sslmode=require>`, `RAILWAY_DEPLOYMENT_DRAINING_SECONDS=30`.
 - staging url `https://app-staging-895f.up.railway.app`.
+- database: neon project `invoiceapp` id `blue-hat-64568041`, org `Uminda` (`org-nameless-unit-86171587`), `aws-ap-southeast-1`, postgres 18, database `invoiceapp`, owner role `invoiceapp_owner`. runtime role `app_rw` is created by migration 0001. connection is the **direct** endpoint (no `-pooler`) so migrations and advisory locks keep a session.
+- service `Postgres` id `1d936f7f-d551-47b5-9acb-b73d0dac6259` is decommissioned once staging on neon is verified. see D20.
 - `production` environment is created at cutover (step 8), not before. nothing here touches the streamlit app.
 
 ## 7. deploy
@@ -99,8 +100,8 @@ argon2id (owasp params), server-side sessions table (`token_hash`, user, ip, use
 
 ## 8. backups and recovery
 
-- railway scheduled postgres volume backups on.
-- nightly logical dump to r2 (`pg_dump -Fc`), 35 day retention, monthly restore drill into a scratch database. a backup that has never been restored is not a backup.
+- neon point-in-time restore for the recent window (free tier: hours, paid: days). verify the window before relying on it.
+- nightly logical dump to r2 (`pg_dump -Fc`), 35 day retention, monthly restore drill into a scratch database or a neon branch. a backup that has never been restored is not a backup.
 - pdfs live in r2 with versioning on.
 
 ## 9. observability

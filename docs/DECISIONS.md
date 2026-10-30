@@ -39,7 +39,7 @@ rules:
 
 ## D04 — hosting: railway for compute + postgres, cloudflare only as edge
 
-**date** 2026-10-30 · **status** accepted · verified against vendor docs 2026-10-30
+**date** 2026-10-30 · **status** accepted · postgres part superseded by D20 (2026-10-30) · verified against vendor docs 2026-10-30
 
 **decision** go app, postgres and gotenberg all run on railway. cloudflare provides dns, waf/rate limiting, turnstile and r2 backups. no application code runs on cloudflare.
 
@@ -205,3 +205,22 @@ rules:
 **why** stock is the second place a dealership is cheated: a unit leaves the yard and the books never say so. a database invariant survives refactors. hiding cost from sales is the smallest permission split that keeps the margin private while the counter keeps working.
 
 **cost** a damaged or written off unit has no movement kind yet; it needs its own entry when the business asks for it. until then the only way a unit leaves the yard is a sale.
+
+## D20 - the online database is neon, not railway postgres
+
+**date** 2026-10-30 · **status** accepted (supersedes the postgres part of D04 and section 6a of `ARCHITECTURE.md`)
+
+**context** railway postgres works, but its free volume has no branching and no point-in-time restore, and a restore drill means copying a volume. neon gives a copy-on-write branch in seconds, instant restore, and a free tier that fits staging and one dealership. the rewrite is still early enough that no production data exists.
+
+**decision**
+
+- the app and gotenberg stay on railway, singapore. the database is neon project `invoiceapp` (`blue-hat-64568041`, `aws-ap-southeast-1`, postgres 18, database `invoiceapp`).
+- the app connects to the direct (non pooled) endpoint with `sslmode=require`. migrations and `pg_advisory_lock` need a session, and tenant scoping is already transaction local, so the pgbouncer pooler adds a failure mode without a benefit.
+- `app_rw` is still created by migration 0001, exactly as on any other postgres. neon's owner role has `CREATEROLE` (checked before the cutover) and becomes the role's admin, so runtime role separation, forced RLS and the stock trigger are unchanged.
+- the full test suite is run against a neon branch before any cutover. a branch is thrown away afterwards.
+- staging data was not migrated. it held one tenant and one owner created an hour earlier, and reaching it would have needed a temporary public TCP proxy on the database. the staging host runs `/setup` once instead. production data at cutover (step 8) is a separate, reviewed import.
+- the railway postgres service is removed only after the neon setup is verified from a signed in session.
+
+**why** a branch means a preview environment, a restore drill or a risky migration is a copy-on-write operation measured in seconds, not a volume copy. instant restore covers the "someone deleted a day" case that a volume backup only partly covers. at this scale both are free.
+
+**cost** the free tier scales compute to zero, so the first request after idle pays a cold start (measured 0.4 to 1.1 s during the cutover). if it is felt at the counter, the paid tier keeps a warm floor. also one more vendor to hold credentials for; the api key and database password live in railway variables and the local neon profile only.

@@ -50,7 +50,7 @@ the test database must exist: `createdb invoiceapp_test` and the connecting role
 
 ## current state
 
-step 3 done: customers (search, add, edit, soft delete, per tenant NIC uniqueness) and stock (`/vehicles` intake, edit, reserve/release; `/stock` on hand vs the append only ledger, which a database trigger keeps in {0,1} per vehicle). cost and price need `vehicle.write`, so sales cannot see or set them. staging is live at `https://app-staging-895f.up.railway.app` (project `invoiceapp`, branch `rewrite/go-htmx`, postgres 18 in singapore). the next commit is step 4 (documents + numbering + pdf) as specified in `docs/PLAN.md`.
+step 3 done: customers (search, add, edit, soft delete, per tenant NIC uniqueness) and stock (`/vehicles` intake, edit, reserve/release; `/stock` on hand vs the append only ledger, which a database trigger keeps in {0,1} per vehicle). cost and price need `vehicle.write`, so sales cannot see or set them. staging is live at `https://app-staging-895f.up.railway.app` (project `invoiceapp`, branch `rewrite/go-htmx`; app on railway singapore, database on neon `invoiceapp` id `blue-hat-64568041`, `aws-ap-southeast-1`, postgres 18). the staging database was reset at the neon cutover, so `/setup` runs once more. the next commit is step 4 (documents + numbering + pdf) as specified in `docs/PLAN.md`.
 
 ## reference material
 
