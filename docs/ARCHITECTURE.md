@@ -78,6 +78,16 @@ html template per document type, rendered by go, posted to gotenberg `/forms/chr
 
 argon2id (owasp params), server-side sessions table (`token_hash`, user, ip, user agent, idle and absolute expiry, revoked_at). cookie `__Host-session`, httpOnly, secure, samesite=lax. csrf token in a `__Host-csrf` cookie + hidden form field, compared constant time. login rate limited per ip and per account, lockout with backoff. totp for owner/manager. password reset by emailed single-use token (hash stored). every session is listable and revocable by the user and by the owner.
 
+## 6a. railway, as provisioned (2026-10-30)
+
+- project `invoiceapp` id `67312fd4-6f50-4025-a332-f9a46347686a`, workspace `waruni sandachaya's Projects`.
+- environment `staging` id `7cf9b3bb-d020-4af7-ac52-ed417f6f8fbf`, region singapore (`asia-southeast1`).
+- service `app` id `1b4d3976-2e56-4b81-ab8e-72697c62511d`, source `Spyboss/InvoiceApp` branch `rewrite/go-htmx`, dockerfile build.
+- service `Postgres` id `1d936f7f-d551-47b5-9acb-b73d0dac6259`, image `ghcr.io/railwayapp-templates/postgres-ssl:18`, volume 5gb at `/var/lib/postgresql/data`.
+- app variables: `APP_ENV=staging`, `LOG_LEVEL=info`, `DATABASE_URL=${{Postgres.DATABASE_URL}}`, `RAILWAY_DEPLOYMENT_DRAINING_SECONDS=30`.
+- staging url `https://app-staging-895f.up.railway.app`.
+- `production` environment is created at cutover (step 8), not before. nothing here touches the streamlit app.
+
 ## 7. deploy
 
 - railway service from this repo, branch `rewrite/go-htmx`, dockerfile build.

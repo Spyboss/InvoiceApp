@@ -38,11 +38,8 @@ jobs:
       - name: install templ
         run: go install github.com/a-h/templ/cmd/templ@$(go list -m -f '{{.Version}}' github.com/a-h/templ)
 
-      - name: generate templates
-        run: templ generate -fail
-
-      - name: generated files must be committed
-        run: git diff --exit-code
+      - name: templates are up to date
+        run: templ generate -check
 
       - run: go vet ./...
 

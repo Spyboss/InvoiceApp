@@ -31,7 +31,7 @@ if the task is not covered by the current step, say so instead of inventing scop
 ```
 go vet ./...
 go test ./...
-templ generate -fail -f *.templ   (or: templ generate -fail ./...)
+templ generate -check           # fails if a .templ change was not regenerated
 golangci-lint run ./...           (if installed)
 ```
 
@@ -49,7 +49,7 @@ sqlc generate                  # after editing queries
 
 ## current state
 
-step 1: the skeleton exists (`cmd/server`, `internal/config`, `internal/db`, `internal/httpx`, `internal/web`) and is green locally. the next action is the railway staging deploy, then step 2 as specified in `docs/PLAN.md`.
+step 1 done. staging is live at `https://app-staging-895f.up.railway.app` (project `invoiceapp` on railway, branch `rewrite/go-htmx`, postgres 18 in singapore). the next commit is step 2 (tenancy + auth) as specified in `docs/PLAN.md`.
 
 ## reference material
 
