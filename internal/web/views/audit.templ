@@ -1,0 +1,68 @@
+package views
+
+import "time"
+
+type AuditRow struct {
+	Actor  string
+	Action string
+	Entity string
+	IP     string
+	At     time.Time
+}
+
+type AuditData struct {
+	TenantName string
+	UserName   string
+	CSRFToken  string
+	Rows       []AuditRow
+}
+
+templ Audit(d AuditData) {
+	@Layout("Audit log", d.TenantName, d.UserName, auditBody(d))
+}
+
+templ auditBody(d AuditData) {
+	<article class="wide">
+		<header>
+			<h1>Audit log</h1>
+			<p class="muted">Everything that changed, newest first. This list cannot be edited.</p>
+		</header>
+
+		if len(d.Rows) == 0 {
+			<p>Nothing recorded yet.</p>
+		} else {
+			<div class="table-scroll">
+				<table>
+					<thead>
+						<tr>
+							<th scope="col">When (UTC)</th>
+							<th scope="col">Who</th>
+							<th scope="col">Action</th>
+							<th scope="col">Entity</th>
+							<th scope="col">IP</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, row := range d.Rows {
+							<tr>
+								<td>{ row.At.UTC().Format("2006-01-02 15:04:05") }</td>
+								<td>{ row.Actor }</td>
+								<td><code>{ row.Action }</code></td>
+								<td>{ row.Entity }</td>
+								<td>{ row.IP }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+
+		<footer>
+			<p><a href="/">Back</a></p>
+			<form method="post" action="/logout">
+				<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
+				<button type="submit" class="secondary">Sign out</button>
+			</form>
+		</footer>
+	</article>
+}

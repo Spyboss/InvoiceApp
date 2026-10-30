@@ -14,6 +14,8 @@ import (
 	"github.com/spyboss/invoiceapp/internal/buildinfo"
 	"github.com/spyboss/invoiceapp/internal/config"
 	"github.com/spyboss/invoiceapp/internal/db"
+	"github.com/spyboss/invoiceapp/internal/store"
+	"github.com/spyboss/invoiceapp/internal/tenant"
 	"github.com/spyboss/invoiceapp/internal/web"
 )
 
@@ -25,6 +27,12 @@ func main() {
 }
 
 func run() error {
+	// Local development only: deployments have no .env and real environment
+	// variables win over the file either way.
+	if err := config.LoadDotEnv(".env"); err != nil {
+		return fmt.Errorf("read .env: %w", err)
+	}
+
 	cfg, err := config.Load(os.Getenv)
 	if err != nil {
 		return fmt.Errorf("config: %w", err)
@@ -36,15 +44,29 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	if err := migrate(ctx, cfg, log); err != nil {
+		return err
+	}
+
 	pool, err := db.Open(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return fmt.Errorf("database: %w", err)
 	}
 	defer pool.Close()
 
+	st := store.New(pool)
+	resolver := tenant.NewResolver(st, cfg.DevTenantSlug)
+
 	srv := &http.Server{
-		Addr:              cfg.HTTPAddr,
-		Handler:           web.New(log, pool),
+		Addr: cfg.HTTPAddr,
+		Handler: web.New(web.Deps{
+			Log:           log,
+			Store:         st,
+			Ping:          pool.Ping,
+			ResolveTenant: resolver.ByHost,
+			ForgetTenant:  resolver.Forget,
+			SecureCookies: cfg.Env != config.EnvDev,
+		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      60 * time.Second,
@@ -83,5 +105,22 @@ func run() error {
 		return fmt.Errorf("shutdown: %w", err)
 	}
 	log.Info("shutdown complete")
+	return nil
+}
+
+// migrate applies pending migrations with the admin credentials, then closes
+// that pool. The server never serves a request on the admin connection.
+func migrate(ctx context.Context, cfg config.Config, log *slog.Logger) error {
+	admin, err := db.OpenAdmin(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return fmt.Errorf("migration connection: %w", err)
+	}
+	defer admin.Close()
+
+	applied, err := db.Migrate(ctx, admin)
+	if err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+	log.Info("migrations applied", slog.Int("count", applied))
 	return nil
 }

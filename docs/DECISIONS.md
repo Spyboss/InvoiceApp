@@ -165,3 +165,25 @@ rules:
 **date** 2026-10-30 · **status** accepted
 
 **decision** no offline write mode, no custom template editor, no double-entry ledger, no native mobile app, no microservices. if a future requirement needs one of these, it gets a new decision entry first.
+
+## D17 — no sqlc, no goose: hand written pgx + a small migration runner
+
+**date** 2026-10-30 · **status** accepted (supersedes the sqlc and goose lines in D13 and `ARCHITECTURE.md`)
+
+**context** `go install sqlc` spent more than ten minutes compiling `pg_query_go` on the dev machine and never finished. goose would be a second binary and a second config for a job that is, here, about 90 lines: forward only, one database, one writer.
+
+**decision** queries are hand written pgx v5 in `internal/store`, one file per aggregate. migrations are embedded `.sql` files in `internal/db/migrations`, applied at boot by `internal/db/migrate.go` under `pg_advisory_lock`, recorded in `schema_migrations`. forward only. an applied migration is never edited; a fix is a new file.
+
+**why** one toolchain (`go` + `templ`), no codegen step in the edit loop or in ci, no generated code to review, no second binary. the sql sits next to the method that runs it.
+
+**cost** no compile time column checking. paid down by integration tests against real postgres for money, numbering, permissions and tenant isolation, which the rules require anyway. if the schema passes ~40 tables and drift becomes real, sqlc can come back through a new entry.
+
+## D18 — first run setup closes after the first tenant
+
+**date** 2026-10-30 · **status** accepted
+
+**decision** `/setup` can create a tenant and its owner only while the installation has zero tenants. after that, a hostname with no tenant row is a 404 and `/setup` refuses. adding a dealership later is an operator action: insert the tenant, then that host's `/setup` creates its owner.
+
+**why** an open signup screen on a public hostname is free resource use and a support burden. selling to other dealers (v2) needs billing and an admin console, which is a different feature with its own step.
+
+**cost** onboarding a second dealer today needs one database insert. acceptable until v2.

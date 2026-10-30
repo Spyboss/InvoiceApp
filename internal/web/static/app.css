@@ -8,11 +8,81 @@
 	--pico-primary-inverse: #fff;
 }
 
-article {
-	max-width: 32rem;
+.site-header {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 1rem;
+	padding-block: 1rem;
+	border-bottom: 1px solid var(--pico-muted-border-color);
+	margin-bottom: 1.5rem;
+}
+
+.site-header .brand {
+	font-weight: 700;
+	font-size: 1.05rem;
+	color: var(--pico-color);
+	text-decoration: none;
+}
+
+.site-header .who {
+	color: var(--pico-muted-color);
+	font-size: 0.9rem;
+}
+
+article.narrow {
+	max-width: 26rem;
 	margin-inline: auto;
+}
+
+article.wide {
+	max-width: 56rem;
+	margin-inline: auto;
+}
+
+.facts {
+	display: grid;
+	grid-template-columns: max-content 1fr;
+	gap: 0.25rem 1rem;
+}
+
+.facts dt {
+	color: var(--pico-muted-color);
+}
+
+.facts dd {
+	margin: 0;
+}
+
+.permissions {
+	list-style: none;
+	padding: 0;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+}
+
+.permissions li {
+	background: var(--pico-code-background-color);
+	border-radius: 0.25rem;
+	padding: 0.15rem 0.45rem;
+}
+
+.table-scroll {
+	overflow-x: auto;
+}
+
+table {
+	font-size: 0.85rem;
+	white-space: nowrap;
 }
 
 code {
 	word-break: break-all;
+}
+
+@media (max-width: 420px) {
+	.site-header .who {
+		display: none;
+	}
 }

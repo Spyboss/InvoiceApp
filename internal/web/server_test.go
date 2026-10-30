@@ -10,14 +10,38 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/spyboss/invoiceapp/internal/store"
+	"github.com/spyboss/invoiceapp/internal/tenant"
 )
 
-func testServer(ping func(context.Context) error) http.Handler {
-	return newServer(slog.New(slog.NewTextHandler(io.Discard, nil)), ping)
+var testTenant = store.Tenant{
+	ID:     uuid.MustParse("0199a000-0000-7000-8000-000000000001"),
+	Slug:   "test-motors",
+	Name:   "Test Motors",
+	Domain: "test.local",
+}
+
+func testHandler(ping func(context.Context) error) http.Handler {
+	return testHandlerResolving(ping, func(context.Context, string) (store.Tenant, error) {
+		return testTenant, nil
+	})
+}
+
+func testHandlerResolving(ping func(context.Context) error, resolve func(context.Context, string) (store.Tenant, error)) http.Handler {
+	return New(Deps{
+		Log:           slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Ping:          ping,
+		ResolveTenant: resolve,
+		Now:           func() time.Time { return time.Date(2026, 10, 30, 9, 0, 0, 0, time.UTC) },
+	})
 }
 
 func TestHealthzOK(t *testing.T) {
-	h := testServer(func(context.Context) error { return nil })
+	h := testHandler(func(context.Context) error { return nil })
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
@@ -42,7 +66,7 @@ func TestHealthzOK(t *testing.T) {
 }
 
 func TestHealthzDatabaseDown(t *testing.T) {
-	h := testServer(func(context.Context) error { return errors.New("connection refused") })
+	h := testHandler(func(context.Context) error { return errors.New("connection refused") })
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
@@ -60,7 +84,7 @@ func TestHealthzDatabaseDown(t *testing.T) {
 }
 
 func TestHealthzNoStore(t *testing.T) {
-	h := testServer(func(context.Context) error { return nil })
+	h := testHandler(func(context.Context) error { return nil })
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
@@ -71,7 +95,7 @@ func TestHealthzNoStore(t *testing.T) {
 }
 
 func TestNotFoundIsHTML(t *testing.T) {
-	h := testServer(func(context.Context) error { return nil })
+	h := testHandler(func(context.Context) error { return nil })
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/nope", nil))
@@ -87,8 +111,25 @@ func TestNotFoundIsHTML(t *testing.T) {
 	}
 }
 
+func TestUnknownHostSaysSo(t *testing.T) {
+	h := testHandlerResolving(func(context.Context) error { return nil },
+		func(context.Context, string) (store.Tenant, error) {
+			return store.Tenant{}, tenant.ErrUnknownHost
+		})
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "No site at this address") {
+		t.Errorf("body = %q", rec.Body.String())
+	}
+}
+
 func TestStaticIsServed(t *testing.T) {
-	h := testServer(func(context.Context) error { return nil })
+	h := testHandler(func(context.Context) error { return nil })
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/static/app.css", nil))
@@ -101,8 +142,36 @@ func TestStaticIsServed(t *testing.T) {
 	}
 }
 
+func TestPostWithoutCSRFIsRejected(t *testing.T) {
+	h := testHandler(func(context.Context) error { return nil })
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/login", strings.NewReader("email=a@b.c")))
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "Form expired") {
+		t.Errorf("body = %q", rec.Body.String())
+	}
+}
+
+func TestAnonymousHomeRedirectsToLogin(t *testing.T) {
+	h := testHandler(func(context.Context) error { return nil })
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303", rec.Code)
+	}
+	if got := rec.Header().Get("Location"); got != "/login" {
+		t.Errorf("location = %q, want /login", got)
+	}
+}
+
 func TestHealthzRejectsPost(t *testing.T) {
-	h := testServer(func(context.Context) error { return nil })
+	h := testHandler(func(context.Context) error { return nil })
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/healthz", nil))

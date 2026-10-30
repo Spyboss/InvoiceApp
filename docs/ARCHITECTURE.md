@@ -20,13 +20,14 @@ tenant resolution: host header → `tenants.domain` (cached in memory, invalidat
 ## 2. folders
 
 ```
-cmd/server/            main: config, db, router, graceful shutdown
+cmd/server/            main: config, migrate, db, router, graceful shutdown
 internal/
   config/              env parsing, fail fast
-  db/                  pgx pool, tx helper, sqlc generated code
-  db/queries/          *.sql (sqlc source of truth)
-  auth/                password hashing, sessions, csrf, permissions
-  tenant/              resolution, context, rls session vars
+  db/                  pgx pools (admin + app_rw), pool tuning
+  db/migrations/       embedded append-only *.sql, applied at boot
+  store/               every sql statement in the app (pgx, one file per aggregate)
+  auth/                password hashing, sessions, csrf, permissions, lockout
+  tenant/              host -> tenant resolution, cache, request context
   audit/               append-only write log
   money/               cents parsing/formatting
   numbering/           atomic series allocation
@@ -36,12 +37,11 @@ internal/
   reports/             day end, sales, stock, receivables
   pdf/                 html templates -> gotenberg client -> archive
   httpx/               middleware: request id, logging, recover, headers
-  web/                 handlers, templ views, static assets (embed)
-migrations/            goose sql, append-only
+  web/                 handlers, middleware, templ views, static assets (embed)
 docs/                  this folder
 ```
 
-rules: `internal/web` may import services; services may import `db`, `money`, `audit`; nothing imports `web`. no package named `utils`, `helpers`, `models`, `types`.
+rules: `internal/web` may import services; services may import `store`, `money`, `audit`; nothing imports `web`. no package named `utils`, `helpers`, `models`, `types`. only `internal/store` writes sql.
 
 ## 3. request lifecycle
 
@@ -50,7 +50,7 @@ rules: `internal/web` may import services; services may import `db`, `money`, `a
 3. session load (cookie → `sessions` row) → user + permissions in context.
 4. csrf check on any non-GET.
 5. permission check in handler.
-6. service call inside a transaction: `SET LOCAL app.tenant_id = ...` then queries (rls enforces too).
+6. service call inside a transaction: `select set_config('app.tenant_id', $1, true)` then queries (rls enforces too).
 7. write → audit row in the same transaction.
 8. render templ fragment (htmx) or full page.
 
@@ -61,9 +61,9 @@ anything that writes must be one transaction that includes its audit row.
 - postgres 18, `uuidv7()` primary keys, `bigint` cents, `timestamptz`.
 - every business table: `tenant_id`, `created_at`, `created_by`, `updated_at`, `deleted_at`.
 - composite unique indexes always include `tenant_id` (e.g. `(tenant_id, chassis_no)`).
-- rls enabled on every tenant table: `using (tenant_id = current_setting('app.tenant_id')::uuid)`. platform admin runs through a separate, audited path that sets `app.is_platform=true`.
-- migrations via goose, forward only, one file per step, tested up and down on a scratch db in ci.
-- queries via sqlc. no orm, no string-built sql.
+- rls enabled and forced on every tenant table: `tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid`. forced means the table owner is not exempt either.
+- migrations via `internal/db/migrate.go`, embedded, forward only, one file per step, applied at boot under an advisory lock. an applied file is never edited.
+- queries hand written pgx in `internal/store`. no orm, no string-built sql, no query builder.
 
 ## 5. documents and pdf
 
@@ -114,5 +114,5 @@ argon2id (owasp params), server-side sessions table (`token_hash`, user, ip, use
 - security headers: hsts, `default-src 'self'`, no inline js (htmx is vendored, not inline), frame-ancestors none.
 - all forms csrf protected; all state changes post/put/delete.
 - no secrets in repo, `.env` gitignored, railway variables per environment.
-- dependency policy: stdlib + a short allowlist (pgx, sqlc, goose, templ, x/crypto, uuid). every addition needs a reason in the pr.
+- dependency policy: stdlib + a short allowlist (pgx, templ, x/crypto, uuid). every addition needs a reason in the pr.
 - uploads (letterhead, logos) restricted to png/jpeg, size capped, re-encoded server side, stored in r2.

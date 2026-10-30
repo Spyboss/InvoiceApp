@@ -25,6 +25,9 @@ type Config struct {
 	HTTPAddr    string
 	DatabaseURL string
 	LogLevel    slog.Level
+	// DevTenantSlug lets http://localhost resolve to a tenant without hosts
+	// file entries. It is refused in production.
+	DevTenantSlug string
 }
 
 // Load reads configuration from getenv, which is os.Getenv in production and a
@@ -55,10 +58,14 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 
 	cfg := Config{
-		Env:         env,
-		HTTPAddr:    httpAddr(getenv),
-		DatabaseURL: databaseURL,
-		LogLevel:    level,
+		Env:           env,
+		HTTPAddr:      httpAddr(getenv),
+		DatabaseURL:   databaseURL,
+		LogLevel:      level,
+		DevTenantSlug: strings.TrimSpace(getenv("TENANT_DEV")),
+	}
+	if cfg.Env == EnvProduction && cfg.DevTenantSlug != "" {
+		problems = append(problems, errors.New("TENANT_DEV must be empty in production"))
 	}
 	if err := errors.Join(problems...); err != nil {
 		return Config{}, err

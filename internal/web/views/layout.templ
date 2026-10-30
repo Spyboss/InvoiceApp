@@ -1,0 +1,26 @@
+package views
+
+templ Layout(title string, tenantName string, userName string, body templ.Component) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<meta name="robots" content="noindex"/>
+			<title>{ title }</title>
+			<link rel="stylesheet" href="/static/pico.min.css"/>
+			<link rel="stylesheet" href="/static/app.css"/>
+		</head>
+		<body>
+			<header class="container site-header">
+				<span class="brand">{ tenantName }</span>
+				if userName != "" {
+					<span class="who">{ userName }</span>
+				}
+			</header>
+			<main class="container">
+				@body
+			</main>
+		</body>
+	</html>
+}

@@ -6,47 +6,81 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
+	"github.com/spyboss/invoiceapp/internal/auth"
 	"github.com/spyboss/invoiceapp/internal/httpx"
-	"github.com/spyboss/invoiceapp/internal/web/views"
+	"github.com/spyboss/invoiceapp/internal/store"
 )
 
-// Server carries the dependencies every handler needs.
+// Deps is everything the router needs. The two tenant functions are plain
+// funcs so tests can resolve hosts without a database.
+type Deps struct {
+	Log           *slog.Logger
+	Store         *store.Store
+	Ping          func(ctx context.Context) error
+	ResolveTenant func(ctx context.Context, host string) (store.Tenant, error)
+	ForgetTenant  func(host string)
+	SecureCookies bool
+	Now           func() time.Time
+}
+
 type Server struct {
-	log  *slog.Logger
-	ping func(context.Context) error
+	log      *slog.Logger
+	store    *store.Store
+	auth     *auth.Manager
+	limiter  *auth.Limiter
+	ping     func(ctx context.Context) error
+	resolver func(ctx context.Context, host string) (store.Tenant, error)
+	forget   func(host string)
+	secure   bool
+	now      func() time.Time
 }
 
-// New returns the http handler for the whole site, middleware included.
-func New(log *slog.Logger, pool *pgxpool.Pool) http.Handler {
-	return newServer(log, pool.Ping)
-}
-
-func newServer(log *slog.Logger, ping func(context.Context) error) http.Handler {
-	s := &Server{log: log, ping: ping}
+func New(d Deps) http.Handler {
+	now := d.Now
+	if now == nil {
+		now = time.Now
+	}
+	s := &Server{
+		log:      d.Log,
+		store:    d.Store,
+		auth:     auth.NewManager(d.Store),
+		limiter:  auth.NewLimiter(20, 10*time.Minute),
+		ping:     d.Ping,
+		resolver: d.ResolveTenant,
+		forget:   d.ForgetTenant,
+		secure:   d.SecureCookies,
+		now:      now,
+	}
+	s.auth.Now = now
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /healthz", s.healthz())
 	mux.Handle("GET /static/", staticHandler())
+	mux.Handle("GET /setup", s.setupPage())
+	mux.Handle("POST /setup", s.setupSubmit())
+	mux.Handle("GET /login", s.loginPage())
+	mux.Handle("POST /login", s.loginSubmit())
+	mux.Handle("POST /logout", s.logoutSubmit())
+	mux.Handle("GET /{$}", s.requireUser(s.homePage()))
+	mux.Handle("GET /audit", s.requirePermission("audit.view", s.auditPage()))
 	mux.Handle("/", s.notFound())
 
 	return httpx.Chain(mux,
 		httpx.WithRequestID(),
 		httpx.RealIP(),
-		httpx.Logger(log),
-		httpx.Recoverer(log),
+		httpx.Logger(d.Log),
+		httpx.Recoverer(d.Log),
 		httpx.SecureHeaders(),
+		s.tenantHandler,
+		s.sessionHandler,
+		s.csrfHandler,
 	)
 }
 
 func (s *Server) notFound() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		s.render(w, r, http.StatusNotFound, views.ErrorPage(
-			"Page not found",
-			"There is nothing at this address.",
-			httpx.RequestID(r.Context()),
-		))
+		s.renderError(w, r, http.StatusNotFound, "Page not found", "There is nothing at this address.")
 	}
 }

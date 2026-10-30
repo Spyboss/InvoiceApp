@@ -1,0 +1,51 @@
+package views
+
+templ Setup(bootstrap bool, tenantName string, dealership string, name string, email string, message string, csrf string) {
+	if bootstrap {
+		@Layout("Set up", "New installation", "", setupBody(true, tenantName, dealership, name, email, message, csrf))
+	} else {
+		@Layout("Set up", tenantName, "", setupBody(false, tenantName, dealership, name, email, message, csrf))
+	}
+}
+
+templ setupBody(bootstrap bool, tenantName string, dealership string, name string, email string, message string, csrf string) {
+	<article class="narrow">
+		if bootstrap {
+			<h1>Set up this dealership</h1>
+			<p>This installation has no account yet. The first account becomes the owner.</p>
+		} else {
+			<h1>Create the owner account</h1>
+			<p>{ tenantName } has no users yet. The first account becomes the owner.</p>
+		}
+		if message != "" {
+			<p role="alert">{ message }</p>
+		}
+		<form method="post" action="/setup">
+			<input type="hidden" name="csrf_token" value={ csrf }/>
+			if bootstrap {
+				<label>
+					Dealership name
+					<input type="text" name="dealership" value={ dealership } maxlength="120" required autofocus/>
+				</label>
+			}
+			<label>
+				Your name
+				<input type="text" name="name" value={ name } maxlength="120" autocomplete="name" required/>
+			</label>
+			<label>
+				Email
+				<input type="email" name="email" value={ email } autocomplete="username" required/>
+			</label>
+			<label>
+				Password
+				<input type="password" name="password" minlength="12" autocomplete="new-password" required/>
+				<small>At least 12 characters.</small>
+			</label>
+			<label>
+				Repeat password
+				<input type="password" name="confirm" minlength="12" autocomplete="new-password" required/>
+			</label>
+			<button type="submit">Create account</button>
+		</form>
+	</article>
+}

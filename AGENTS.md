@@ -40,16 +40,17 @@ plus: server boots, the new screen works on a 360px wide viewport, and the step'
 ## commands
 
 ```bash
-go run ./cmd/server            # local server (needs .env)
-go test ./...                  # all tests
+go run ./cmd/server            # local server (needs .env); migrations run at boot
+go test ./...                  # all tests (set TEST_DATABASE_URL for the db ones)
 templ generate                 # after editing .templ files
-go run github.com/pressly/goose/v3/cmd/goose -dir migrations postgres "$DATABASE_URL" up
-sqlc generate                  # after editing queries
+psql "$DATABASE_URL"           # inspect; the runtime role is app_rw, admin creds in DATABASE_URL
 ```
+
+the test database must exist: `createdb invoiceapp_test` and the connecting role needs `createrole` the first time, because migration 0001 creates the `app_rw` role.
 
 ## current state
 
-step 1 done. staging is live at `https://app-staging-895f.up.railway.app` (project `invoiceapp` on railway, branch `rewrite/go-htmx`, postgres 18 in singapore). the next commit is step 2 (tenancy + auth) as specified in `docs/PLAN.md`.
+step 2 done: tenancy (host → tenant, rls forced, runtime role `app_rw`), auth (argon2id, sessions, csrf, lockout), first-run `/setup`, audit trail at `/audit`. staging is live at `https://app-staging-895f.up.railway.app` (project `invoiceapp`, branch `rewrite/go-htmx`, postgres 18 in singapore). the next commit is step 3 (customers + stock) as specified in `docs/PLAN.md`.
 
 ## reference material
 
