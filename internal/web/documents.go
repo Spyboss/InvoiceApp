@@ -322,9 +322,22 @@ func (s *Server) documentPage() http.HandlerFunc {
 		}
 
 		var d store.Document
+		var balance store.DocumentBalance
+		var receipts []store.Payment
+		isInvoice := false
 		err := s.store.InTenant(r.Context(), t.ID, func(q *store.Store) error {
 			var err error
 			d, err = q.DocumentByID(r.Context(), t.ID, id)
+			if err != nil {
+				return err
+			}
+			isInvoice = d.DocType == store.DocSalesCash || d.DocType == store.DocSalesLease
+			if !isInvoice {
+				return nil
+			}
+			// What is owed is derived from the receipts, so the invoice paper
+			// and the money screen can never disagree.
+			balance, err = q.DocumentBalanceFor(r.Context(), t.ID, id)
 			return err
 		})
 		if errors.Is(err, store.ErrNotFound) || (err == nil && !canReadDocument(r.Context(), d, u.User.ID)) {
@@ -334,6 +347,19 @@ func (s *Server) documentPage() http.HandlerFunc {
 		if err != nil {
 			s.internalError(w, r, "document", err)
 			return
+		}
+
+		canSeePayments := isInvoice && auth.Can(r.Context(), "payment.read")
+		if canSeePayments {
+			err = s.store.InTenant(r.Context(), t.ID, func(q *store.Store) error {
+				var err error
+				receipts, err = q.ListPayments(r.Context(), t.ID, store.PaymentFilter{DocumentID: &d.ID, Limit: 100})
+				return err
+			})
+			if err != nil {
+				s.internalError(w, r, "document receipts", err)
+				return
+			}
 		}
 
 		s.render(w, r, http.StatusOK, views.DocumentDetail(views.DocumentDetailData{
@@ -368,6 +394,12 @@ func (s *Server) documentPage() http.HandlerFunc {
 			CanPrint:        s.pdf != nil,
 			IsQuote:         d.DocType == store.DocQuotation,
 			IsOpenQuote:     d.DocType == store.DocQuotation && d.Status == store.DocOpen,
+			IsInvoice:       isInvoice,
+			CanSeePayments:  canSeePayments,
+			CanTakePayment:  isInvoice && balance.OutstandingCents > 0 && auth.Can(r.Context(), "payment.record"),
+			Paid:            money.Format(balance.PaidCents),
+			Outstanding:     money.Format(balance.OutstandingCents),
+			Receipts:        receiptRows(receipts),
 		}))
 	}
 }

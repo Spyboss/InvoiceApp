@@ -37,6 +37,9 @@ func navLinks(ctx context.Context, path string) []views.NavLink {
 		{"/vehicles", "Vehicles", "vehicle.read"},
 		{"/stock", "Stock", "stock.read"},
 		{"/documents", "Documents", "document.read"},
+		{"/payments", "Payments", "payment.read"},
+		{"/day-end", "Day end", "dayend.read"},
+		{"/reports", "Reports", "report.view"},
 		{"/audit", "Audit", "audit.view"},
 	}
 

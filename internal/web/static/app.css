@@ -122,6 +122,24 @@ article.wide {
 	background: var(--pico-code-background-color);
 }
 
+.tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.25rem 0.9rem;
+	font-size: 0.95rem;
+	margin-bottom: 0.5rem;
+}
+
+.tabs a {
+	color: var(--pico-muted-color);
+	text-decoration: none;
+}
+
+.tabs a.here {
+	color: var(--pico-primary);
+	font-weight: 700;
+}
+
 .muted {
 	color: var(--pico-muted-color);
 }

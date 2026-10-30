@@ -249,3 +249,31 @@ rules:
 **why** a number is the identity of a sale; a duplicate or a gap is a fraud signal before it is a bug. snapshots and the update trigger mean the paper cannot be rewritten after the customer leaves. storing the first print is cheaper than proving a regenerated one is byte identical.
 
 **cost** pdf bytes live in postgres until r2; around 60kb per invoice is fine at this volume, and moving later is a copy plus a reader change. one more railway service to keep alive, and a network dependency at the first print; afterwards the archive serves. the proforma is tied to singer paper until another letterhead is supplied. the sample `BIBILE 01.docx` stays out of the public repo because it carries a customer's nic and phone; its geometry and extracted assets live in `internal/pdf`.
+
+## D22 — payments, the closed day, and the z
+
+**date** 2026-10-30 · **status** accepted
+
+**context** step 5 puts money against paper. the live app records a payment as a row in a sheet with no link to the invoice, so the same receipt can pay two invoices and nothing says which one it settled; the day end is a typed total with no expectation behind it, and last month's z can be retyped today.
+
+**decision**
+
+- one receipt pays one invoice: `payments.document_id` is not null and there is no unallocated credit. a customer deposit is still an `ADVANCE` document, not a payment.
+- the outstanding balance is derived: `documents.balance_cents − Σ posted payments`. the document row stays frozen, and the invoice screen shows "paid since issue" and "outstanding" beside the printed "balance at issue", so the paper and the money can never be made to agree by editing either one.
+- an overpayment is refused twice over: `CreatePayment` checks the balance under a lock so the clerk gets a sentence, and the `payments_within_balance` trigger (SQLSTATE `PAY02`) refuses the row whatever wrote it. a refused receipt burns no number, because the series is bumped inside the same transaction, after the check.
+- a receipt is inserted once; the only update it accepts is a reversal (`payments_reverse_only`, `PAY03`). the reversal is dated `reversed_on`, the business date the money was handed back, never the day it was taken. the receipt, its reason, its actor and its timestamp stay in the trail.
+- money is dated with the server's business date in Colombo, never with a date from the browser. backdating, and with it the approval pin, arrives with step 6.
+- a money report reads as at a business date, not as of now: receivables count a receipt from the day it was taken and stop counting it only on the day the money went back, and an invoice dated after the report date is not in it. last month's receivables therefore read as they read last month, and a reversal taken today cannot rewrite a month that was already closed.
+- money cannot be dated on a day that is already closed, neither a receipt nor a reversal: `payments_on_open_day` raises `DAY01`. without it, cash taken after the z would sit on a date whose totals are frozen and would appear on no z at all, which is the one way money can leave the drawer without leaving a trace. the receipt screen replaces the form with the reason rather than letting the clerk type an amount that will be refused.
+- payment methods are fixed in code and in the database: `CASH`, `CARD`, `BANK`, `CHEQUE`. only cash counts towards the drawer. tenant-editable methods come with settings in step 6.
+- day end: one close per tenant per business date (`unique (tenant_id, business_date)`). the server computes `expected = opening float + cash in − cash handed back`, the cashier types only the float and the counted cash, and `variance = counted − expected` is enforced by a check constraint. the float defaults to what the last close counted, and stays editable.
+- the z lines are frozen into `day_end_lines` at close time: payments by method, money handed back, documents by type, stock movements. the labels store codes, and the screen supplies the words, so renaming a document type tomorrow does not rewrite what a z said last month.
+- a close is insert only. `app_rw` has no update or delete on `day_ends` or `day_end_lines`, and `day_ends_closed` (`DAY01`) refuses even the owner role.
+- permissions: `payment.read`, `payment.record`, `payment.reverse`, `dayend.read`, `dayend.close`. OWNER, MANAGER and ACCOUNTS hold the money permissions; SALES holds none of them. reports reuse `report.view`.
+- a money report is scoped the way documents are: without `document.read.all` the store is handed the caller's own id, so a salesperson's report counts their invoices and not a colleague's. the page says so. stock cost follows `vehicle.write`, because SALES must not see margin.
+- csv export is utf-8 with a BOM so excel reads it, quoted per RFC 4180 through `encoding/csv`, and a cell a spreadsheet would run as a formula is prefixed with an apostrophe unless it is a plain number. money cells are written by `money.Plain`, without grouping, so the spreadsheet reads a number and go never does float arithmetic on money.
+- deferred deliberately: the receipt pdf, the z pdf and the report pdfs, the reconciliation view (C11, per day and user), and the variance alert threshold. the z is readable on screen and exportable as csv today; the alert threshold belongs to tenant settings in step 6, and the paper belongs with the letterhead work.
+
+**why** the two rules that keep a dealership honest about money are "a receipt never exceeds the balance" and "a counted day never changes". both are in the database, not in one handler, so no later import script or screen can step around them. dating a correction on the day it happens is what lets the z stay immutable without hiding the correction.
+
+**cost** a wrong receipt cannot be edited; it is reversed and re-taken, which is two rows of history instead of one tidy fix. a cashier who closes the day early cannot take more cash until the date turns over, so the day end has to be the last action of the day; reopening a closed day with approval is step 6. and there is still no customer credit balance, because a payment is always attached to an invoice.

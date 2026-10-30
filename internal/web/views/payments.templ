@@ -1,0 +1,336 @@
+package views
+
+// MethodOption is one way money can arrive, in a filter or a form.
+type MethodOption struct {
+	Value    string
+	Label    string
+	Selected bool
+}
+
+// ReceiptRow is one formatted receipt in the list.
+type ReceiptRow struct {
+	ID         string
+	No         string
+	Date       string
+	InvoiceID  string
+	InvoiceNo  string
+	Customer   string
+	Method     string
+	Amount     string
+	Status     string
+	ReversedOn string
+}
+
+type PaymentsData struct {
+	TenantName string
+	UserName   string
+	Nav        []NavLink
+	Query      string
+	Method     string
+	From       string
+	To         string
+	Methods    []MethodOption
+	Rows       []ReceiptRow
+}
+
+templ Payments(d PaymentsData) {
+	@Layout("Payments", d.TenantName, d.UserName, d.Nav, paymentsBody(d))
+}
+
+templ paymentsBody(d PaymentsData) {
+	<article class="wide">
+		<header>
+			<h1>Payments</h1>
+			<form method="get" action="/payments" class="search">
+				<select name="method" aria-label="Payment method">
+					for _, m := range d.Methods {
+						<option value={ m.Value } selected?={ m.Selected }>{ m.Label }</option>
+					}
+				</select>
+				<input type="date" name="from" value={ d.From } aria-label="From date"/>
+				<input type="date" name="to" value={ d.To } aria-label="To date"/>
+				<input type="search" name="q" value={ d.Query } placeholder="Receipt, invoice or customer" aria-label="Search receipts"/>
+				<button type="submit" class="secondary">Filter</button>
+			</form>
+		</header>
+
+		<p class="muted">
+			A receipt pays one invoice and is never edited. Money handed back is recorded as a reversal on the day it happens, so a day that is already counted stays as it was.
+		</p>
+
+		if len(d.Rows) == 0 {
+			<p class="muted">No receipts match. Take a payment from the invoice you want to settle.</p>
+		} else {
+			<div class="table-scroll">
+				<table>
+					<thead>
+						<tr>
+							<th scope="col">Receipt</th>
+							<th scope="col">Date</th>
+							<th scope="col">Invoice</th>
+							<th scope="col">Customer</th>
+							<th scope="col">Method</th>
+							<th scope="col">Amount (Rs)</th>
+							<th scope="col">Status</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, row := range d.Rows {
+							<tr>
+								<td><a href={ "/payments/" + row.ID }>{ row.No }</a></td>
+								<td>{ row.Date }</td>
+								<td><a href={ "/documents/" + row.InvoiceID }>{ row.InvoiceNo }</a></td>
+								<td>{ row.Customer }</td>
+								<td>{ row.Method }</td>
+								<td>{ row.Amount }</td>
+								<td>
+									<span class="status">{ row.Status }</span>
+									if row.ReversedOn != "" {
+										<small class="muted">{ row.ReversedOn }</small>
+									}
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+
+		<footer>
+			<div class="actions">
+				<a href="/documents" role="button" class="secondary">Go to an invoice</a>
+			</div>
+		</footer>
+	</article>
+}
+
+// PaymentFormFields is the part of the receipt that comes from the clerk. The
+// date is not here on purpose: the server dates the receipt, so nobody can move
+// money into a day that is already closed.
+type PaymentFormFields struct {
+	DocumentID string
+	Amount     string
+	Method     string
+	Reference  string
+	Notes      string
+}
+
+type PaymentFormData struct {
+	TenantName    string
+	UserName      string
+	Nav           []NavLink
+	CSRFToken     string
+	DocumentID    string
+	DocumentNo    string
+	DocumentType  string
+	CustomerID    string
+	CustomerName  string
+	Date          string
+	IssuedBalance string
+	AlreadyPaid   string
+	Outstanding   string
+	Amount        string
+	Method        string
+	Reference     string
+	Notes         string
+	Methods       []MethodOption
+	PaidInFull    bool
+	// ClosedNote is set when today's day end is already closed, and holds the
+	// reason the form is not offered. Empty on an open day.
+	ClosedNote string
+	Error      string
+}
+
+templ PaymentForm(d PaymentFormData) {
+	@Layout("Payment against "+d.DocumentNo, d.TenantName, d.UserName, d.Nav, paymentFormBody(d))
+}
+
+templ paymentFormBody(d PaymentFormData) {
+	<article class="narrow">
+		<header>
+			<h1>Receipt for { d.DocumentType } { d.DocumentNo }</h1>
+			<p class="muted">
+				Customer: <a href={ "/customers/" + d.CustomerID }>{ d.CustomerName }</a>
+			</p>
+		</header>
+
+		<dl class="facts">
+			<dt>Balance at issue</dt>
+			<dd>Rs { d.IssuedBalance }</dd>
+			<dt>Already paid</dt>
+			<dd>Rs { d.AlreadyPaid }</dd>
+			<dt>Still owed</dt>
+			<dd><strong>Rs { d.Outstanding }</strong></dd>
+			<dt>Receipt date</dt>
+			<dd>{ d.Date } (today)</dd>
+		</dl>
+
+		if d.Error != "" {
+			<p role="alert">{ d.Error }</p>
+		}
+
+		if d.PaidInFull {
+			<p role="status">This invoice is paid in full. There is nothing left to receipt.</p>
+			<div class="actions">
+				<a href={ "/documents/" + d.DocumentID } role="button" class="secondary">Back to the invoice</a>
+			</div>
+		} else if d.ClosedNote != "" {
+			// The reason comes from the server, so the sentence a cashier reads
+			// here is the same one a refused post is answered with.
+			<p role="status">{ d.ClosedNote }</p>
+			<div class="actions">
+				<a href={ "/documents/" + d.DocumentID } role="button" class="secondary">Back to the invoice</a>
+			</div>
+		} else {
+			<form method="post" action="/payments">
+				<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
+				<input type="hidden" name="document_id" value={ d.DocumentID }/>
+
+				<div class="grid">
+					<label>
+						Amount handed over (Rs)
+						<input type="text" name="amount" value={ d.Amount } inputmode="decimal" required/>
+						<small>At most Rs { d.Outstanding }. A payment above the balance is refused.</small>
+					</label>
+					<label>
+						How it arrived
+						<select name="method" required>
+							for _, m := range d.Methods {
+								<option value={ m.Value } selected?={ m.Selected }>{ m.Label }</option>
+							}
+						</select>
+						<small>Only cash counts towards the drawer at day end.</small>
+					</label>
+				</div>
+
+				<label>
+					Reference
+					<input type="text" name="reference" value={ d.Reference } maxlength="60" placeholder="Cheque no, bank slip, card last four"/>
+				</label>
+
+				<label>
+					Notes
+					<textarea name="notes" rows="2" maxlength="2000">{ d.Notes }</textarea>
+				</label>
+
+				<div class="actions">
+					<button type="submit">Record receipt</button>
+					<a href={ "/documents/" + d.DocumentID } role="button" class="secondary">Cancel</a>
+				</div>
+			</form>
+		}
+	</article>
+}
+
+type ReceiptDetailData struct {
+	TenantName     string
+	UserName       string
+	Nav            []NavLink
+	CSRFToken      string
+	ID             string
+	No             string
+	Year           int
+	Date           string
+	InvoiceNo      string
+	InvoiceID      string
+	InvoiceType    string
+	CustomerName   string
+	Method         string
+	Amount         string
+	Reference      string
+	Notes          string
+	Status         string
+	CreatedByName  string
+	Created        bool
+	Reversed       bool
+	ReversedOn     string
+	ReversedByName string
+	ReversalReason string
+	CanReverse     bool
+	Today          string
+	Error          string
+}
+
+templ ReceiptDetail(d ReceiptDetailData) {
+	@Layout("Receipt "+d.No, d.TenantName, d.UserName, d.Nav, receiptDetailBody(d))
+}
+
+templ receiptDetailBody(d ReceiptDetailData) {
+	<article class="narrow">
+		<header>
+			<h1>Receipt { d.No }</h1>
+			<p>
+				<span class="status">{ d.Status }</span>
+			</p>
+			if d.Created {
+				<p role="status">Receipt recorded.</p>
+			}
+			if d.Reversed {
+				<p role="status">Receipt reversed. The money is recorded as handed back today.</p>
+			}
+			if d.Error != "" {
+				<p role="alert">{ d.Error }</p>
+			}
+		</header>
+
+		<dl class="facts">
+			<dt>Date</dt>
+			<dd>{ d.Date }</dd>
+			<dt>Year</dt>
+			<dd>{ d.Year }</dd>
+			<dt>Invoice</dt>
+			<dd><a href={ "/documents/" + d.InvoiceID }>{ d.InvoiceType } { d.InvoiceNo }</a></dd>
+			<dt>Customer</dt>
+			<dd>{ d.CustomerName }</dd>
+			<dt>Method</dt>
+			<dd>{ d.Method }</dd>
+			if d.Reference != "" {
+				<dt>Reference</dt>
+				<dd>{ d.Reference }</dd>
+			}
+			<dt>Amount</dt>
+			<dd><strong>Rs { d.Amount }</strong></dd>
+			if d.CreatedByName != "" {
+				<dt>Taken by</dt>
+				<dd>{ d.CreatedByName }</dd>
+			}
+			if d.Notes != "" {
+				<dt>Notes</dt>
+				<dd>{ d.Notes }</dd>
+			}
+			if d.ReversedOn != "" {
+				<dt>Reversed on</dt>
+				<dd>{ d.ReversedOn }</dd>
+				<dt>Reversed by</dt>
+				<dd>{ d.ReversedByName }</dd>
+				<dt>Why</dt>
+				<dd>{ d.ReversalReason }</dd>
+			}
+		</dl>
+
+		if d.CanReverse {
+			<details>
+				<summary>Reverse this receipt</summary>
+				<p class="muted">
+					The receipt stays in the record. The money is recorded as leaving the drawer on { d.Today }, so the day it was taken keeps its figures.
+				</p>
+				<form method="post" action={ "/payments/" + d.ID + "/reverse" }>
+					<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
+					<label>
+						Why is the money being handed back?
+						<textarea name="reason" rows="2" maxlength="500" required></textarea>
+						<small>At least three characters. This is what the owner reads later.</small>
+					</label>
+					<button type="submit" class="secondary">Reverse receipt</button>
+				</form>
+			</details>
+		}
+
+		<footer>
+			<div class="actions">
+				<a href="/payments" role="button" class="secondary">Back to payments</a>
+				<a href={ "/documents/" + d.InvoiceID } role="button">Open the invoice</a>
+			</div>
+		</footer>
+	</article>
+}

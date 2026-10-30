@@ -1,0 +1,297 @@
+package views
+
+// DayLineRow is one frozen line of the z. Section is the heading it prints
+// under, Label the words for the stored code.
+type DayLineRow struct {
+	Section  string
+	Label    string
+	Qty      int
+	Amount   string
+	HasMoney bool
+}
+
+// DayEndFields is what the cashier typed. The expected cash is not here: the
+// server computes it, so the arithmetic on the paper is never the browser's.
+type DayEndFields struct {
+	Float   string
+	Counted string
+	Notes   string
+}
+
+// DayEndView is a closed day, formatted for reading.
+type DayEndView struct {
+	ID            string
+	ZNo           string
+	Date          string
+	OpeningFloat  string
+	CashIn        string
+	CashOut       string
+	Expected      string
+	Counted       string
+	Variance      string
+	VarianceSize  string
+	Short         bool
+	Exact         bool
+	SalesCount    int
+	SalesTotal    string
+	PaymentsTotal string
+	ClosedBy      string
+	ClosedAt      string
+	Notes         string
+	Lines         []DayLineRow
+}
+
+// DayTotalsView is the day so far, before it is closed.
+type DayTotalsView struct {
+	CashIn        string
+	CashOut       string
+	SalesCount    int
+	SalesTotal    string
+	PaymentsTotal string
+	Lines         []DayLineRow
+}
+
+// DayEndRow is one line in the list of recent closes.
+type DayEndRow struct {
+	ID       string
+	ZNo      string
+	Date     string
+	Expected string
+	Counted  string
+	Variance string
+	Short    bool
+}
+
+type DayEndData struct {
+	TenantName  string
+	UserName    string
+	Nav         []NavLink
+	CSRFToken   string
+	Date        string
+	Open        bool
+	LastCounted string
+	Fields      DayEndFields
+	Totals      DayTotalsView
+	Closed      *DayEndView
+	Recent      []DayEndRow
+	CanClose    bool
+	Error       string
+}
+
+templ DayEnd(d DayEndData) {
+	@Layout("Day end", d.TenantName, d.UserName, d.Nav, dayEndBody(d))
+}
+
+templ dayEndBody(d DayEndData) {
+	<article class="wide">
+		<header>
+			<h1>Day end</h1>
+			<p class="muted">Business date { d.Date }. One close per day. A closed day is never edited.</p>
+		</header>
+
+		if d.Open {
+			<h2>Today so far</h2>
+			<dl class="facts">
+				<dt>Invoices issued</dt>
+				<dd>{ d.Totals.SalesCount } { plural(d.Totals.SalesCount, "invoice", "invoices") }, Rs { d.Totals.SalesTotal }</dd>
+				<dt>Receipts taken</dt>
+				<dd>Rs { d.Totals.PaymentsTotal } in total</dd>
+				<dt>Cash in</dt>
+				<dd>Rs { d.Totals.CashIn }</dd>
+				<dt>Cash handed back</dt>
+				<dd>Rs { d.Totals.CashOut }</dd>
+			</dl>
+
+			if len(d.Totals.Lines) > 0 {
+				<h2>What the z will list</h2>
+				@dayLinesTable(d.Totals.Lines)
+			}
+
+			if d.CanClose {
+				<h2>Close the day</h2>
+				if d.Error != "" {
+					<p role="alert">{ d.Error }</p>
+				}
+				<p class="muted">
+					Expected cash = opening float + cash in (Rs { d.Totals.CashIn }) - cash handed back (Rs { d.Totals.CashOut }). The variance is what you counted against that, and it is stored as it is.
+				</p>
+				<form method="post" action="/day-end">
+					<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
+					<div class="grid">
+						<label>
+							Opening float (Rs)
+							<input type="text" name="opening_float" value={ d.Fields.Float } inputmode="decimal" required/>
+							<small>The last day closed with Rs { d.LastCounted } in the drawer. Change it if it is wrong.</small>
+						</label>
+						<label>
+							Cash counted (Rs)
+							<input type="text" name="counted" value={ d.Fields.Counted } inputmode="decimal" required/>
+						</label>
+					</div>
+					<label>
+						Notes
+						<textarea name="notes" rows="2" maxlength="2000" placeholder="Anything worth writing down about the drawer today">{ d.Fields.Notes }</textarea>
+					</label>
+					<div class="actions">
+						<button type="submit">Close the day</button>
+					</div>
+					<p class="muted">Check the day before you close it. After this, the totals cannot be changed.</p>
+				</form>
+			} else {
+				<p class="muted">Only the owner, manager and accounts can close the day.</p>
+			}
+		} else if d.Closed != nil {
+			@dayEndCard(*d.Closed)
+		}
+
+		if len(d.Recent) > 0 {
+			<h2>Recent closes</h2>
+			<div class="table-scroll">
+				<table>
+					<thead>
+						<tr>
+							<th scope="col">Z</th>
+							<th scope="col">Date</th>
+							<th scope="col">Expected (Rs)</th>
+							<th scope="col">Counted (Rs)</th>
+							<th scope="col">Variance (Rs)</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, row := range d.Recent {
+							<tr>
+								<td><a href={ "/day-end/" + row.ID }>{ row.ZNo }</a></td>
+								<td>{ row.Date }</td>
+								<td>{ row.Expected }</td>
+								<td>{ row.Counted }</td>
+								<td>
+									{ row.Variance }
+									if row.Short {
+										<span class="status">short</span>
+									}
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	</article>
+}
+
+type DayEndDetailData struct {
+	TenantName string
+	UserName   string
+	Nav        []NavLink
+	End        DayEndView
+	Closed     bool
+	Exists     bool
+}
+
+templ DayEndDetail(d DayEndDetailData) {
+	@Layout("Day end "+d.End.ZNo, d.TenantName, d.UserName, d.Nav, dayEndDetailBody(d))
+}
+
+templ dayEndDetailBody(d DayEndDetailData) {
+	<article class="wide">
+		<header>
+			<h1>Day end { d.End.ZNo }</h1>
+			if d.Closed {
+				<p role="status">Day closed and stored.</p>
+			}
+			if d.Exists {
+				<p role="status">This day was already closed. Nothing was changed.</p>
+			}
+		</header>
+		@dayEndCard(d.End)
+		<footer>
+			<div class="actions">
+				<a href="/day-end" role="button" class="secondary">Back to day end</a>
+				<a href={ "/day-end/" + d.End.ID + "/csv" } role="button" class="secondary">Download CSV</a>
+			</div>
+		</footer>
+	</article>
+}
+
+// dayEndCard is one closed day. The same block is used on the day end screen
+// and on the z itself, so the two can never say different things.
+templ dayEndCard(e DayEndView) {
+	<article>
+		<header>
+			<h2>Z { e.ZNo } · { e.Date }</h2>
+		</header>
+
+		if !e.Exact {
+			if e.Short {
+				<p role="alert">The drawer was short by Rs { e.VarianceSize }. The variance is stored with the close.</p>
+			} else {
+				<p role="alert">The drawer was over by Rs { e.VarianceSize }. The variance is stored with the close.</p>
+			}
+		}
+
+		<dl class="facts">
+			<dt>Opening float</dt>
+			<dd>Rs { e.OpeningFloat }</dd>
+			<dt>Cash in</dt>
+			<dd>Rs { e.CashIn }</dd>
+			<dt>Cash handed back</dt>
+			<dd>Rs { e.CashOut }</dd>
+			<dt>Expected in the drawer</dt>
+			<dd><strong>Rs { e.Expected }</strong></dd>
+			<dt>Counted</dt>
+			<dd>Rs { e.Counted }</dd>
+			<dt>Variance</dt>
+			<dd>{ e.Variance }</dd>
+			<dt>Invoices issued</dt>
+			<dd>{ e.SalesCount } { plural(e.SalesCount, "invoice", "invoices") }, Rs { e.SalesTotal }</dd>
+			<dt>Receipts taken</dt>
+			<dd>Rs { e.PaymentsTotal }</dd>
+			<dt>Closed by</dt>
+			<dd>{ e.ClosedBy }</dd>
+			<dt>Closed at</dt>
+			<dd>{ e.ClosedAt }</dd>
+			if e.Notes != "" {
+				<dt>Notes</dt>
+				<dd>{ e.Notes }</dd>
+			}
+		</dl>
+
+		if len(e.Lines) > 0 {
+			<h3>Lines</h3>
+			@dayLinesTable(e.Lines)
+		} else {
+			<p class="muted">Nothing was issued, taken or moved on this day.</p>
+		}
+	</article>
+}
+
+templ dayLinesTable(lines []DayLineRow) {
+	<div class="table-scroll">
+		<table>
+			<thead>
+				<tr>
+					<th scope="col">Section</th>
+					<th scope="col">Item</th>
+					<th scope="col">Count</th>
+					<th scope="col">Amount (Rs)</th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, line := range lines {
+					<tr>
+						<td>{ line.Section }</td>
+						<td>{ line.Label }</td>
+						<td>{ line.Qty }</td>
+						<td>
+							if line.HasMoney {
+								{ line.Amount }
+							} else {
+								<span class="muted">-</span>
+							}
+						</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+}

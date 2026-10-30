@@ -17,6 +17,15 @@ const (
 	DocAdvance    = "ADVANCE"
 )
 
+// Series that are numbered paper but not rows in documents: a payment receipt
+// (RCP) pays an invoice and a day end (Z) closes the drawer. They take their
+// numbers from the same counters as the documents, so a clerk cannot meet two
+// papers with the same number.
+const (
+	SeriesPayment = "PAYMENT"
+	SeriesDayEnd  = "DAY_END"
+)
+
 // Document statuses. A quotation is open until it is converted; everything
 // else is issued once.
 const (
@@ -25,7 +34,7 @@ const (
 	DocConverted = "CONVERTED"
 )
 
-// ValidDocType reports whether the type is one this app issues.
+// ValidDocType reports whether the type is one this app issues as a document.
 func ValidDocType(t string) bool {
 	switch t {
 	case DocQuotation, DocSalesCash, DocSalesLease, DocProforma, DocAdvance:
@@ -34,13 +43,19 @@ func ValidDocType(t string) bool {
 	return false
 }
 
-// AllocateDocumentNo bumps the series for (tenant, type, year) and returns the
-// new number, zero padded to four digits. The upsert takes a row lock, so two
+// ValidSeries reports whether a number series exists. Documents and the two
+// numbered papers share the counter table, so this is the wider set.
+func ValidSeries(s string) bool {
+	return ValidDocType(s) || s == SeriesPayment || s == SeriesDayEnd
+}
+
+// AllocateNo bumps the series for (tenant, series, year) and returns the new
+// number, zero padded to four digits. The upsert takes a row lock, so two
 // clerks issuing at the same moment get 0041 and 0042, never the same number.
-// It must run inside the same transaction as the document insert: if that
+// It must run inside the same transaction as the paper it numbers: if that
 // transaction rolls back, the counter rolls back with it and no gap is left.
-func (s *Store) AllocateDocumentNo(ctx context.Context, tenantID uuid.UUID, docType string, year int) (string, error) {
-	if !ValidDocType(docType) {
+func (s *Store) AllocateNo(ctx context.Context, tenantID uuid.UUID, series string, year int) (string, error) {
+	if !ValidSeries(series) {
 		return "", ErrInvalidDocument
 	}
 	if year < 2000 || year > 2100 {
@@ -55,8 +70,8 @@ func (s *Store) AllocateDocumentNo(ctx context.Context, tenantID uuid.UUID, docT
 		returning last_value`
 
 	var n int64
-	if err := s.db.QueryRow(ctx, q, tenantID, docType, year).Scan(&n); err != nil {
-		return "", fmt.Errorf("allocate document number: %w", err)
+	if err := s.db.QueryRow(ctx, q, tenantID, series, year).Scan(&n); err != nil {
+		return "", fmt.Errorf("allocate number: %w", err)
 	}
 	return fmt.Sprintf("%04d", n), nil
 }

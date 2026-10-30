@@ -272,6 +272,12 @@ type DocumentDetailData struct {
 	CanPrint        bool
 	IsQuote         bool
 	IsOpenQuote     bool
+	IsInvoice       bool
+	CanSeePayments  bool
+	CanTakePayment  bool
+	Paid            string
+	Outstanding     string
+	Receipts        []ReceiptRow
 }
 
 templ DocumentDetail(d DocumentDetailData) {
@@ -344,17 +350,56 @@ templ documentDetailBody(d DocumentDetailData) {
 			<table>
 				<tbody>
 					<tr><th scope="row">Selling price</th><td>Rs { d.Price }</td></tr>
-					<tr><th scope="row">Advance / paid</th><td>Rs { d.Down }</td></tr>
-					<tr><th scope="row">Balance</th><td>Rs { d.Balance }</td></tr>
+					<tr><th scope="row">Advance / paid at issue</th><td>Rs { d.Down }</td></tr>
+					<tr><th scope="row">Balance at issue</th><td>Rs { d.Balance }</td></tr>
+					if d.IsInvoice && d.CanSeePayments {
+						<tr><th scope="row">Paid since issue</th><td>Rs { d.Paid }</td></tr>
+						<tr><th scope="row">Outstanding</th><td><strong>Rs { d.Outstanding }</strong></td></tr>
+					}
 				</tbody>
 			</table>
 		</div>
+
+		if d.IsInvoice && d.CanSeePayments {
+			<h2>Receipts</h2>
+			if len(d.Receipts) == 0 {
+				<p class="muted">No money has been taken against this invoice since it was issued.</p>
+			} else {
+				<div class="table-scroll">
+					<table>
+						<thead>
+							<tr>
+								<th scope="col">Receipt</th>
+								<th scope="col">Date</th>
+								<th scope="col">Method</th>
+								<th scope="col">Amount (Rs)</th>
+								<th scope="col">Status</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, row := range d.Receipts {
+								<tr>
+									<td><a href={ "/payments/" + row.ID }>{ row.No }</a></td>
+									<td>{ row.Date }</td>
+									<td>{ row.Method }</td>
+									<td>{ row.Amount }</td>
+									<td><span class="status">{ row.Status }</span></td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			}
+		}
 
 		<footer>
 			<div class="actions">
 				<a href="/documents" role="button" class="secondary">Back to documents</a>
 				if d.CanPrint {
 					<a href={ "/documents/" + d.ID + "/pdf" } role="button" target="_blank" rel="noopener">Download PDF</a>
+				}
+				if d.CanTakePayment {
+					<a href={ "/documents/" + d.ID + "/payment" } role="button">Take a payment</a>
 				}
 				if d.IsOpenQuote && d.CanCreate {
 					<a href={ "/documents/new?quote_id=" + d.ID } role="button">Create invoice from quotation</a>

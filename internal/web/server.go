@@ -92,6 +92,25 @@ func New(d Deps) http.Handler {
 	mux.Handle("POST /documents", s.requirePermission("document.create", s.documentCreate()))
 	mux.Handle("GET /documents/{id}", s.requirePermission("document.read", s.documentPage()))
 	mux.Handle("GET /documents/{id}/pdf", s.requirePermission("document.read", s.documentPDF()))
+	mux.Handle("GET /documents/{id}/payment", s.requirePermission("payment.record", s.paymentNewPage()))
+
+	mux.Handle("GET /payments", s.requirePermission("payment.read", s.paymentsPage()))
+	mux.Handle("POST /payments", s.requirePermission("payment.record", s.paymentCreate()))
+	mux.Handle("GET /payments/{id}", s.requirePermission("payment.read", s.paymentPage()))
+	mux.Handle("POST /payments/{id}/reverse", s.requirePermission("payment.reverse", s.paymentReverse()))
+
+	mux.Handle("GET /day-end", s.requirePermission("dayend.read", s.dayEndPage()))
+	mux.Handle("POST /day-end", s.requirePermission("dayend.close", s.dayEndClose()))
+	mux.Handle("GET /day-end/{id}", s.requirePermission("dayend.read", s.dayEndDetailPage()))
+	mux.Handle("GET /day-end/{id}/csv", s.requirePermission("dayend.read", s.dayEndCSV()))
+
+	mux.Handle("GET /reports", s.requirePermission("report.view", s.reportsIndex()))
+	mux.Handle("GET /reports/sales", s.requirePermission("report.view", s.salesReportPage()))
+	mux.Handle("GET /reports/sales.csv", s.requirePermission("report.view", s.salesReportCSV()))
+	mux.Handle("GET /reports/receivables", s.requirePermission("report.view", s.receivablesReportPage()))
+	mux.Handle("GET /reports/receivables.csv", s.requirePermission("report.view", s.receivablesReportCSV()))
+	mux.Handle("GET /reports/stock", s.requirePermission("report.view", s.stockReportPage()))
+	mux.Handle("GET /reports/stock.csv", s.requirePermission("report.view", s.stockReportCSV()))
 
 	mux.Handle("/", s.notFound())
 

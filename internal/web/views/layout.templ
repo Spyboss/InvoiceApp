@@ -49,6 +49,14 @@ func navClass(link NavLink) string {
 	return ""
 }
 
+// plural words a count the way a person says it: 1 invoice, 2 invoices.
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
+}
+
 func orDash(s string) string {
 	if strings.TrimSpace(s) == "" {
 		return "—"

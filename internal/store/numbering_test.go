@@ -28,7 +28,7 @@ func TestDocumentNumbersAreUniqueUnderConcurrency(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			err := st.InTenant(ctx, alpha.ID, func(q *store.Store) error {
-				no, err := q.AllocateDocumentNo(ctx, alpha.ID, store.DocSalesCash, 2026)
+				no, err := q.AllocateNo(ctx, alpha.ID, store.DocSalesCash, 2026)
 				if err != nil {
 					return err
 				}
@@ -71,7 +71,7 @@ func TestDocumentNumberRollsBackWithTheDocument(t *testing.T) {
 	// A transaction that takes a number and then fails must give it back, so
 	// the next document still gets 0001 and the series has no hole.
 	err := st.InTenant(ctx, alpha.ID, func(q *store.Store) error {
-		if _, err := q.AllocateDocumentNo(ctx, alpha.ID, store.DocSalesCash, 2026); err != nil {
+		if _, err := q.AllocateNo(ctx, alpha.ID, store.DocSalesCash, 2026); err != nil {
 			return err
 		}
 		return errors.New("clerk cancelled")
@@ -83,7 +83,7 @@ func TestDocumentNumberRollsBackWithTheDocument(t *testing.T) {
 	var no string
 	err = st.InTenant(ctx, alpha.ID, func(q *store.Store) error {
 		var err error
-		no, err = q.AllocateDocumentNo(ctx, alpha.ID, store.DocSalesCash, 2026)
+		no, err = q.AllocateNo(ctx, alpha.ID, store.DocSalesCash, 2026)
 		return err
 	})
 	if err != nil {
@@ -105,7 +105,7 @@ func TestDocumentSeriesAreSeparatePerTypeYearAndTenant(t *testing.T) {
 		var no string
 		err := st.InTenant(ctx, tenantID, func(q *store.Store) error {
 			var err error
-			no, err = q.AllocateDocumentNo(ctx, tenantID, docType, year)
+			no, err = q.AllocateNo(ctx, tenantID, docType, year)
 			return err
 		})
 		if err != nil {
@@ -130,7 +130,7 @@ func TestDocumentSeriesAreSeparatePerTypeYearAndTenant(t *testing.T) {
 	var betaNo string
 	err := st.InTenant(ctx, beta.ID, func(q *store.Store) error {
 		var err error
-		betaNo, err = q.AllocateDocumentNo(ctx, beta.ID, store.DocSalesCash, 2026)
+		betaNo, err = q.AllocateNo(ctx, beta.ID, store.DocSalesCash, 2026)
 		return err
 	})
 	if err != nil {

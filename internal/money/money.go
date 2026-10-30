@@ -89,6 +89,20 @@ func Format(cents int64) string {
 	return out
 }
 
+// Plain renders cents for machine readers, without thousands separators, so a
+// spreadsheet reads the cell as a number: 125000050 -> "1250000.50".
+func Plain(cents int64) string {
+	negative := cents < 0
+	if negative {
+		cents = -cents
+	}
+	out := fmt.Sprintf("%d.%02d", cents/100, cents%100)
+	if negative {
+		return "-" + out
+	}
+	return out
+}
+
 func allDigits(s string) bool {
 	if s == "" {
 		return false

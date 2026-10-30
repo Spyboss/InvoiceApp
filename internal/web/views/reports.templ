@@ -1,0 +1,416 @@
+package views
+
+// SalesReportRow is one line of the sales report, by type or by user.
+type SalesReportRow struct {
+	Name    string
+	Count   int
+	Gross   string
+	Down    string
+	Balance string
+}
+
+type SalesTotalRow struct {
+	Count   int
+	Gross   string
+	Down    string
+	Balance string
+}
+
+type SalesReportData struct {
+	TenantName string
+	UserName   string
+	Nav        []NavLink
+	From       string
+	To         string
+	Invalid    bool
+	ReadAll    bool
+	Types      []SalesReportRow
+	Users      []SalesReportRow
+	Total      SalesTotalRow
+}
+
+templ SalesReport(d SalesReportData) {
+	@Layout("Sales report", d.TenantName, d.UserName, d.Nav, salesReportBody(d))
+}
+
+templ salesReportBody(d SalesReportData) {
+	<article class="wide">
+		<header>
+			<h1>Sales</h1>
+			@reportTabs("sales")
+			<form method="get" action="/reports/sales" class="search">
+				<input type="date" name="from" value={ d.From } aria-label="From date"/>
+				<input type="date" name="to" value={ d.To } aria-label="To date"/>
+				<button type="submit" class="secondary">Show</button>
+			</form>
+			<p class="muted">{ d.From } to { d.To }. Quotations and advance receipts are not sales and are not counted here.</p>
+		</header>
+
+		if d.Invalid {
+			<p role="alert">The period starts after it ends, so there is nothing to show. Swap the two dates.</p>
+		}
+		if !d.ReadAll {
+			<p class="muted">You see the invoices you issued. The owner, manager and accounts see every invoice.</p>
+		}
+
+		<h2>By document</h2>
+		if len(d.Types) == 0 {
+			<p class="muted">No invoices in this period.</p>
+		} else {
+			<div class="table-scroll">
+				<table>
+					<thead>
+						<tr>
+							<th scope="col">Document</th>
+							<th scope="col">Invoices</th>
+							<th scope="col">Gross (Rs)</th>
+							<th scope="col">Advance (Rs)</th>
+							<th scope="col">Balance (Rs)</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, row := range d.Types {
+							<tr>
+								<td>{ row.Name }</td>
+								<td>{ row.Count }</td>
+								<td>{ row.Gross }</td>
+								<td>{ row.Down }</td>
+								<td>{ row.Balance }</td>
+							</tr>
+						}
+						<tr>
+							<th scope="row">Total</th>
+							<td><strong>{ d.Total.Count }</strong></td>
+							<td><strong>{ d.Total.Gross }</strong></td>
+							<td><strong>{ d.Total.Down }</strong></td>
+							<td><strong>{ d.Total.Balance }</strong></td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		}
+
+		<h2>By user</h2>
+		if len(d.Users) == 0 {
+			<p class="muted">Nobody issued an invoice in this period.</p>
+		} else {
+			<div class="table-scroll">
+				<table>
+					<thead>
+						<tr>
+							<th scope="col">User</th>
+							<th scope="col">Invoices</th>
+							<th scope="col">Gross (Rs)</th>
+							<th scope="col">Advance (Rs)</th>
+							<th scope="col">Balance (Rs)</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, row := range d.Users {
+							<tr>
+								<td>{ row.Name }</td>
+								<td>{ row.Count }</td>
+								<td>{ row.Gross }</td>
+								<td>{ row.Down }</td>
+								<td>{ row.Balance }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+
+		<footer>
+			<div class="actions">
+				<a href={ "/reports/sales.csv?from=" + d.From + "&to=" + d.To } role="button" class="secondary">Download CSV</a>
+			</div>
+		</footer>
+	</article>
+}
+
+// ReceivableRow is one unpaid invoice.
+type ReceivableRow struct {
+	DocumentID  string
+	DocNo       string
+	Date        string
+	Customer    string
+	Finance     string
+	Balance     string
+	Paid        string
+	Outstanding string
+	Days        int
+	Bucket      string
+}
+
+type ReceivableBucketRow struct {
+	Bucket      string
+	Count       int
+	Outstanding string
+}
+
+type ReceivableFinanceRow struct {
+	Finance     string
+	Count       int
+	Outstanding string
+}
+
+type ReceivablesReportData struct {
+	TenantName     string
+	UserName       string
+	Nav            []NavLink
+	AsOf           string
+	ReadAll        bool
+	Rows           []ReceivableRow
+	Buckets        []ReceivableBucketRow
+	ByFinance      []ReceivableFinanceRow
+	Total          string
+	Count          int
+	HasOutstanding bool
+}
+
+templ ReceivablesReport(d ReceivablesReportData) {
+	@Layout("Receivables", d.TenantName, d.UserName, d.Nav, receivablesReportBody(d))
+}
+
+templ receivablesReportBody(d ReceivablesReportData) {
+	<article class="wide">
+		<header>
+			<h1>Receivables</h1>
+			@reportTabs("receivables")
+			<form method="get" action="/reports/receivables" class="search">
+				<input type="date" name="as_of" value={ d.AsOf } aria-label="As at date"/>
+				<button type="submit" class="secondary">Show</button>
+			</form>
+			<p class="muted">What is still owed as at { d.AsOf }, oldest first.</p>
+		</header>
+
+		if !d.ReadAll {
+			<p class="muted">You see the invoices you issued. The owner, manager and accounts see every invoice.</p>
+		}
+
+		if !d.HasOutstanding {
+			<p class="muted">Nothing is owed. Every invoice is settled.</p>
+		} else {
+			<dl class="facts">
+				<dt>Outstanding</dt>
+				<dd><strong>Rs { d.Total }</strong> across { d.Count } invoices</dd>
+			</dl>
+
+			<h2>Ageing</h2>
+			<div class="table-scroll">
+				<table>
+					<thead>
+						<tr>
+							<th scope="col">Days</th>
+							<th scope="col">Invoices</th>
+							<th scope="col">Outstanding (Rs)</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, row := range d.Buckets {
+							<tr>
+								<td>{ row.Bucket }</td>
+								<td>{ row.Count }</td>
+								<td>{ row.Outstanding }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+
+			<h2>By finance company</h2>
+			<div class="table-scroll">
+				<table>
+					<thead>
+						<tr>
+							<th scope="col">Paying</th>
+							<th scope="col">Invoices</th>
+							<th scope="col">Outstanding (Rs)</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, row := range d.ByFinance {
+							<tr>
+								<td>{ row.Finance }</td>
+								<td>{ row.Count }</td>
+								<td>{ row.Outstanding }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+
+			<h2>Invoices</h2>
+			<div class="table-scroll">
+				<table>
+					<thead>
+						<tr>
+							<th scope="col">Invoice</th>
+							<th scope="col">Date</th>
+							<th scope="col">Customer</th>
+							<th scope="col">Finance</th>
+							<th scope="col">Days</th>
+							<th scope="col">Balance at issue (Rs)</th>
+							<th scope="col">Paid (Rs)</th>
+							<th scope="col">Outstanding (Rs)</th>
+							<th scope="col">Bucket</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, row := range d.Rows {
+							<tr>
+								<td><a href={ "/documents/" + row.DocumentID }>{ row.DocNo }</a></td>
+								<td>{ row.Date }</td>
+								<td>{ row.Customer }</td>
+								<td>{ row.Finance }</td>
+								<td>{ row.Days }</td>
+								<td>{ row.Balance }</td>
+								<td>{ row.Paid }</td>
+								<td>{ row.Outstanding }</td>
+								<td>{ row.Bucket }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+
+		<footer>
+			<div class="actions">
+				<a href={ "/reports/receivables.csv?as_of=" + d.AsOf } role="button" class="secondary">Download CSV</a>
+			</div>
+		</footer>
+	</article>
+}
+
+// StockStatusRow is one status in the yard with its value.
+type StockStatusRow struct {
+	Status string
+	Count  int
+	Cost   string
+	Price  string
+}
+
+// StockAgeRow is one ageing bucket of the units still on hand.
+type StockAgeRow struct {
+	Bucket string
+	Count  int
+	Price  string
+}
+
+type StockReportData struct {
+	TenantName  string
+	UserName    string
+	Nav         []NavLink
+	AsOf        string
+	IncludeCost bool
+	Statuses    []StockStatusRow
+	Ageing      []StockAgeRow
+	OnHand      int
+	OnHandCost  string
+	OnHandSale  string
+	EmptyYard   bool
+}
+
+templ StockReport(d StockReportData) {
+	@Layout("Stock report", d.TenantName, d.UserName, d.Nav, stockReportBody(d))
+}
+
+templ stockReportBody(d StockReportData) {
+	<article class="wide">
+		<header>
+			<h1>Stock</h1>
+			@reportTabs("stock")
+			<p class="muted">The yard as at { d.AsOf }. Ageing counts the days a unit has stood here since it was received.</p>
+		</header>
+
+		if d.EmptyYard {
+			<p class="muted">No units have been received yet.</p>
+		} else {
+			<dl class="facts">
+				<dt>On hand</dt>
+				<dd><strong>{ d.OnHand }</strong> units worth Rs { d.OnHandSale } at the price on the windscreen</dd>
+				if d.IncludeCost {
+					<dt>Capital in the yard</dt>
+					<dd>Rs { d.OnHandCost } at cost</dd>
+				}
+			</dl>
+
+			<h2>By status</h2>
+			<div class="table-scroll">
+				<table>
+					<thead>
+						<tr>
+							<th scope="col">Status</th>
+							<th scope="col">Units</th>
+							if d.IncludeCost {
+								<th scope="col">Cost (Rs)</th>
+							}
+							<th scope="col">Price (Rs)</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, row := range d.Statuses {
+							<tr>
+								<td><span class="status">{ row.Status }</span></td>
+								<td>{ row.Count }</td>
+								if d.IncludeCost {
+									<td>{ row.Cost }</td>
+								}
+								<td>{ row.Price }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+
+			<h2>Ageing of what is on hand</h2>
+			if len(d.Ageing) == 0 {
+				<p class="muted">Nothing is on hand.</p>
+			} else {
+				<div class="table-scroll">
+					<table>
+						<thead>
+							<tr>
+								<th scope="col">Days in the yard</th>
+								<th scope="col">Units</th>
+								<th scope="col">Price (Rs)</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, row := range d.Ageing {
+								<tr>
+									<td>{ row.Bucket }</td>
+									<td>{ row.Count }</td>
+									<td>{ row.Price }</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			}
+		}
+
+		<footer>
+			<div class="actions">
+				<a href="/reports/stock.csv" role="button" class="secondary">Download CSV</a>
+			</div>
+		</footer>
+	</article>
+}
+
+// reportTabs is the three reports, with the current one marked.
+templ reportTabs(here string) {
+	<nav class="tabs">
+		<a href="/reports/sales" class={ tabClass(here == "sales") }>Sales</a>
+		<a href="/reports/receivables" class={ tabClass(here == "receivables") }>Receivables</a>
+		<a href="/reports/stock" class={ tabClass(here == "stock") }>Stock</a>
+	</nav>
+}
+
+func tabClass(active bool) string {
+	if active {
+		return "here"
+	}
+	return ""
+}
