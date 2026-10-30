@@ -1,0 +1,165 @@
+# decisions
+
+append-only decision ledger for the v2 rewrite.
+
+rules:
+- never edit or delete an existing entry. to change a decision, add a new entry and mark the old one `superseded by Dnn`.
+- every entry states the decision, why, and what it costs us.
+- if code and this file disagree, this file wins until a new entry says otherwise.
+
+---
+
+## D01 — `main` stays the production streamlit app
+
+**date** 2026-10-30 · **status** accepted
+
+**decision** `main` is frozen as the running product: `web_app.py` on streamlit cloud, plus `invoice_app.py` and the fastapi/vercel experiment. no rewrite code lands on `main`. the rewrite lives on `rewrite/go-htmx`.
+
+**why** the business bills on it daily. a half-finished rewrite merged into `main` would break revenue.
+
+**cost** two codebases until cutover. we accept that and keep the old one untouched, not "improved".
+
+## D02 — `feat/erp-ts` is archived, not merged
+
+**date** 2026-10-30 · **status** accepted
+
+**decision** the bun/hono/drizzle rewrite stays on its branch as reference only. we port knowledge (schema shape, transaction guards, proforma geometry, money-as-string idea) but no code.
+
+**why** the target architecture changed (single binary go, multi-tenant, editable config, pos-grade controls). keeping two live rewrites guarantees neither ships.
+
+## D03 — stack: go + templ + htmx + pico css, no node toolchain
+
+**date** 2026-10-30 · **status** proposed (waiting on owner confirmation)
+
+**decision** go (latest stable), `net/http` with go 1.22+ method patterns, `templ` for html, htmx 2 vendored, pico css v2 + one hand-written `app.css`. no npm, no tailwind, no bundler. templates and assets embedded with `embed.FS`, so the build is one static binary.
+
+**why** the build pipeline is the thing that rots first in solo projects. removing node removes whole classes of breakage. pico is mobile-first and semantic, which is exactly the ui we need for a shop floor phone.
+
+**cost** less design freedom than tailwind. if we outgrow pico we swap the css layer later; templates and handlers do not change.
+
+## D04 — hosting: railway for compute + postgres, cloudflare only as edge
+
+**date** 2026-10-30 · **status** accepted · verified against vendor docs 2026-10-30
+
+**decision** go app, postgres and gotenberg all run on railway. cloudflare provides dns, waf/rate limiting, turnstile and r2 backups. no application code runs on cloudflare.
+
+**why**
+- cloudflare workers cannot run normal go: only a tinygo/wasm bridge, no goroutines, limited stdlib, explicitly experimental. wrong tool for sessions + sql.
+- cloudflare containers exist but are built around durable-object sandboxes and per-instance lifecycle (rolling updates, sigterm then 15 min kill, cold-ish starts). wrong shape for a steady erp serving 3-8 users.
+- railway runs a normal dockerfile, gives private networking between app/postgres/gotenberg, scheduled postgres volume backups, and one-click domains. cloudflare proxying in front of railway is documented and supported (ssl mode must be **full**, not full-strict).
+
+**cost** ~$5 hobby base + usage. expected $20-30/month for app + postgres + gotenberg at this scale (rates: ~$20/vcpu/mo, ~$10/gb ram/mo, $0.15/gb volume, $0.05/gb egress).
+
+## D05 — multi-tenant from day one
+
+**date** 2026-10-30 · **status** accepted
+
+**decision** one database, shared schema, `tenant_id uuid not null` on every business table. `tenants` table with subdomain, branding, settings, plan. postgres row level security enabled on every tenant table with `current_setting('app.tenant_id')`; application queries also always scope by tenant (belt and braces). tenant is resolved from the host header and cached.
+
+**why** the product will be sold to other dealerships. retrofitting tenancy is roughly two weeks of surgery on every query, index and unique constraint; doing it now is roughly two days.
+
+**cost** every query, index and unique constraint carries a tenant column. every test must prove isolation. platform admin needs a deliberate, audited path across tenants.
+
+## D06 — roles: fixed set, permissions as data
+
+**date** 2026-10-30 · **status** accepted
+
+**decision** tenant roles `OWNER`, `MANAGER`, `SALES`, `ACCOUNTS`, `SERVICE`, plus a platform-level `PLATFORM_ADMIN` that exists outside any tenant. permissions are `resource.action` rows (`invoice.create`, `invoice.void`, `stock.adjust`, `payment.record`, `settings.write`, `report.view`, `audit.view`, ...) granted to roles, with per-user overrides. handlers check permissions; templates hide what the user cannot do.
+
+**why** "sales guy bills and adds stock, admin sees everything" is the real requirement, and it will drift as staff change. hardcoded `if role == "admin"` checks rot instantly.
+
+**cost** a permission table and a middleware. worth it.
+
+## D07 — money, ids, deletes
+
+**date** 2026-10-30 · **status** accepted
+
+**decision** money is `bigint` cents everywhere (db, json, go). no floats, no decimal strings. ids are uuidv7 generated by postgres. all business tables have `created_at`, `created_by`, `updated_at`, `deleted_at`. nothing is hard-deleted; issued documents cannot be edited at all.
+
+**why** float money bugs are how invoicing apps lose trust. uuidv7 keeps b-tree inserts sequential.
+
+**cost** every boundary converts (form string → cents), so one shared parser and tests.
+
+## D08 — anti-cheat is a product feature, not a policy
+
+**date** 2026-10-30 · **status** accepted
+
+**decision** the system is designed so a salesperson cannot quietly under-bill, hide a sale, or move stock without a trace. controls C1..C14 are specified in `BUSINESS-RULES.md` and are part of v1, not "later hardening".
+
+**why** the owner's words: everything tracked, cannot be cheated. that is the actual buying reason for replacing paper.
+
+**cost** friction: voids need a reason, discounts over a floor need approval, day-end needs counting cash. that friction is the feature.
+
+## D09 — document set and numbering
+
+**date** 2026-10-30 · **status** accepted
+
+**decision** v1 documents: quotation, sales invoice (cash), sales invoice (leasing), proforma, advance payment receipt, payment receipt, day-end (z) report. numbering is per tenant, per document type, per year, zero-padded 4 digits, allocated inside the same transaction as the document from a locked counter row. numbers are never reused and never editable.
+
+**why** gaps and duplicates are the fraud signal. atomic allocation is the only way to guarantee both.
+
+**cost** a counter row per tenant/type/year and a lock per issue. negligible at this volume.
+
+## D10 — pdf: gotenberg, redesigned sales documents, byte-faithful proforma
+
+**date** 2026-10-30 · **status** accepted
+
+**decision** all pdfs are html rendered by a gotenberg container (chromium), called over railway private networking. sales invoice, quotation, receipts and reports are redesigned to look clean and modern (a4). the **proforma must match `BIBILE 01.docx` exactly**: letter page 612x792pt, geometry derived from the docx twips, singer wordmark and letterhead as supplied, calibri metrics via carlito (bundled in the gotenberg image). every generated pdf is stored with a sha256 and can be reproduced from the database.
+
+**why** the proforma goes to the leasing company and must look like the document they expect. the rest is our own paper and currently looks dated.
+
+**cost** a second railway service; font substitution has to be verified once with a pixel diff.
+
+## D11 — scope split
+
+**date** 2026-10-30 · **status** accepted
+
+**v1 (replaces streamlit, cannot cheat)** tenancy, users/roles/permissions, audit, customers, vehicle stock + ledger, quotations, invoices (cash/leasing), proforma, advance receipt, payments/receipts, day-end close, reports (sales/stock/receivables/day-end), settings, csv import of history, mobile ui.
+
+**v1.5** notifications (email + telegram for admin alerts), dashboard trends, approval workflow ui, supplier/purchase basics, customer statements.
+
+**v2** parts inventory, service jobs, multi-branch, subscription billing for other dealers, passkeys, public api/webhooks.
+
+**never** double-entry accounting, payroll, offline write sync, user-editable html templates.
+
+**why** "full erp" scoped honestly is a year. v1 is the part that replaces the current app and closes the fraud holes.
+
+## D12 — local dev needs no docker
+
+**date** 2026-10-30 · **status** proposed (waiting on owner confirmation)
+
+**decision** local dev = native postgres on windows + `go run ./cmd/server`, pointing at the railway gotenberg service for pdfs. docker is only needed if we later want fully offline pdf rendering.
+
+**why** docker desktop on windows 10 is a heavy dependency for one developer. native postgres is one installer.
+
+**cost** pdf rendering in dev depends on the network. acceptable.
+
+## D13 — engineering standards (anti-slop)
+
+**date** 2026-10-30 · **status** accepted
+
+**decision** no code without a caller. no `utils` package. no interface with a single implementation. no TODO/fixme. no dead flags. handler → service → sqlc query, one direction. errors wrapped with context. structured `slog` logs. migrations append-only. every step ends green on `go vet ./...`, `go test ./...`, `templ generate -fail` and a manual click-through.
+
+**why** the previous two attempts died of scope and half-finished layers, not of missing features.
+
+## D14 — notifications
+
+**date** 2026-10-30 · **status** accepted (v1.5)
+
+**decision** in-app + email (resend) for account events, and telegram bot messages to the owner for security/business alerts (void, discount override, day-end variance, missing number, after-hours activity). no sms/whatsapp api in v1.
+
+**why** email for users, telegram for the owner is the cheapest reliable channel in sri lanka and needs no per-message billing.
+
+## D15 — analytics
+
+**date** 2026-10-30 · **status** accepted
+
+**decision** a dashboard with six numbers (today sales, month sales, cash vs leasing, gross margin, stock value, receivables) and two trends (daily sales 30d, monthly sales 12m), plus a per-user sales table. no bi tool, no warehouse.
+
+**why** the owner needs steering signals, not dashboards nobody reads.
+
+## D16 — explicit non-goals
+
+**date** 2026-10-30 · **status** accepted
+
+**decision** no offline write mode, no custom template editor, no double-entry ledger, no native mobile app, no microservices. if a future requirement needs one of these, it gets a new decision entry first.
