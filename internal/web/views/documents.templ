@@ -135,6 +135,25 @@ type DocumentFormData struct {
 	CustomerLabel string
 	VehicleLabel  string
 	Error         string
+
+	// ApprovalNeeded says the document as typed has passed the tenant's
+	// discount or backdate limit, so the form explains which rule tripped and
+	// opens the manager pin. Approval carries back what the clerk typed; the
+	// password is never echoed into the page. CanApprove says the caller may
+	// pin an approval at all, so the block only appears where it can be used.
+	ApprovalNeeded bool
+	ApprovalReason string
+	Approval       ApprovalPin
+	CanApprove     bool
+}
+
+// ApprovalPin is what a manager types to sign off a document that has passed
+// the tenant's limit. The pin is the manager's own password, so a clerk at the
+// counter cannot forge it: the server re-authenticates the credentials against
+// the tenant's users before anything is written.
+type ApprovalPin struct {
+	Email string
+	Note  string
 }
 
 templ DocumentForm(d DocumentFormData) {
@@ -232,6 +251,30 @@ templ documentFormBody(d DocumentFormData) {
 				<textarea name="notes" rows="2" maxlength="2000">{ d.Fields.Notes }</textarea>
 			</label>
 
+			if d.ApprovalNeeded {
+				<p role="alert">{ d.ApprovalReason }</p>
+			}
+			if d.ApprovalNeeded || d.CanApprove {
+				<fieldset>
+					<legend>Manager approval</legend>
+					<p class="muted">The manager types their own email and password. Both people end up on the document and in the audit log; the clerk cannot sign this off alone.</p>
+					<div class="grid">
+						<label>
+							Manager email
+							<input type="email" name="approver_email" value={ d.Approval.Email } autocomplete="off" required={ d.ApprovalNeeded }/>
+						</label>
+						<label>
+							Manager password
+							<input type="password" name="approver_password" autocomplete="off" required={ d.ApprovalNeeded }/>
+						</label>
+					</div>
+					<label>
+						Why (optional)
+						<input type="text" name="approval_note" value={ d.Approval.Note } maxlength="500" placeholder="Agreed with the owner on the phone"/>
+					</label>
+				</fieldset>
+			}
+
 			<div class="actions">
 				<button type="submit">{ d.Submit }</button>
 				<a href={ d.Cancel } role="button" class="secondary">Cancel</a>
@@ -278,6 +321,21 @@ type DocumentDetailData struct {
 	Paid            string
 	Outstanding     string
 	Receipts        []ReceiptRow
+
+	// Who signed off a discount or a date past the tenant's limit, and who
+	// voided the document and why. A void keeps every printed field, so these
+	// are the only facts that change on an issued document.
+	CanApprove    bool
+	ApprovalName  string
+	ApprovalAt    string
+	ApprovalNote  string
+	CanVoid       bool
+	Voided        bool
+	VoidName      string
+	VoidedAt      string
+	VoidReason    string
+	VoidError     string
+	CSRFToken     string
 }
 
 templ DocumentDetail(d DocumentDetailData) {
@@ -343,6 +401,20 @@ templ documentDetailBody(d DocumentDetailData) {
 				<dt>Notes</dt>
 				<dd>{ d.Notes }</dd>
 			}
+			if d.ApprovalName != "" {
+				<dt>Approved by</dt>
+				<dd>{ d.ApprovalName } on { d.ApprovalAt }</dd>
+			}
+			if d.ApprovalNote != "" {
+				<dt>Approval note</dt>
+				<dd>{ d.ApprovalNote }</dd>
+			}
+			if d.Voided {
+				<dt>Voided by</dt>
+				<dd>{ d.VoidName } on { d.VoidedAt }</dd>
+				<dt>Void reason</dt>
+				<dd>{ d.VoidReason }</dd>
+			}
 		</dl>
 
 		<h2>Money</h2>
@@ -390,6 +462,26 @@ templ documentDetailBody(d DocumentDetailData) {
 					</table>
 				</div>
 			}
+		}
+
+		if d.Voided {
+			<p role="status">This document is void. It is kept on the record exactly as it was issued, and the unit has gone back to the yard.</p>
+		} else if d.CanVoid {
+			<h2>Void this document</h2>
+			<p class="muted">A void is not a delete. The paper and its number stay on the record with the reason and who gave it, and the unit returns to stock. This cannot be undone.</p>
+			if d.VoidError != "" {
+				<p role="alert">{ d.VoidError }</p>
+			}
+			<form method="post" action={ "/documents/" + d.ID + "/void" }>
+				<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
+				<label>
+					Why is this being voided?
+					<textarea name="reason" rows="2" maxlength="500" required>{ d.VoidReason }</textarea>
+				</label>
+				<div class="actions">
+					<button type="submit" class="secondary">Void document</button>
+				</div>
+			</form>
 		}
 
 		<footer>

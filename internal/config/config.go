@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -33,6 +34,17 @@ type Config struct {
 	GotenbergURL      string
 	GotenbergUsername string
 	GotenbergPassword string
+
+	// Alert channels. Both are optional: with neither set, alerts still queue
+	// and still show on the /alerts page, they just leave the building by no
+	// route. The tenant then decides per dealership where they go, from its
+	// own settings screen.
+	AlertSMTPHost      string
+	AlertSMTPPort      int
+	AlertSMTPUsername  string
+	AlertSMTPPassword  string
+	AlertSMTPFrom      string
+	AlertTelegramToken string
 }
 
 // Load reads configuration from getenv, which is os.Getenv in production and a
@@ -74,6 +86,22 @@ func Load(getenv func(string) string) (Config, error) {
 		problems = append(problems, errors.New("GOTENBERG_USERNAME and GOTENBERG_PASSWORD must be set together"))
 	}
 
+	// Alert channels. A half set relay is refused at boot rather than at the
+	// first void, because a silently dead mailbox is worse than a refusal.
+	alertSMTPHost := strings.TrimSpace(getenv("ALERT_SMTP_HOST"))
+	alertSMTPPort, err := parsePort(getenv("ALERT_SMTP_PORT"))
+	if err != nil {
+		problems = append(problems, err)
+	}
+	alertSMTPUser := strings.TrimSpace(getenv("ALERT_SMTP_USERNAME"))
+	alertSMTPPass := strings.TrimSpace(getenv("ALERT_SMTP_PASSWORD"))
+	if (alertSMTPUser == "") != (alertSMTPPass == "") {
+		problems = append(problems, errors.New("ALERT_SMTP_USERNAME and ALERT_SMTP_PASSWORD must be set together"))
+	}
+	if alertSMTPHost != "" && strings.TrimSpace(getenv("ALERT_SMTP_FROM")) == "" {
+		problems = append(problems, errors.New("ALERT_SMTP_FROM is required when ALERT_SMTP_HOST is set"))
+	}
+
 	cfg := Config{
 		Env:               env,
 		HTTPAddr:          httpAddr(getenv),
@@ -83,6 +111,13 @@ func Load(getenv func(string) string) (Config, error) {
 		GotenbergURL:      gotenbergURL,
 		GotenbergUsername: gotenbergUser,
 		GotenbergPassword: gotenbergPass,
+
+		AlertSMTPHost:      alertSMTPHost,
+		AlertSMTPPort:      alertSMTPPort,
+		AlertSMTPUsername:  alertSMTPUser,
+		AlertSMTPPassword:  alertSMTPPass,
+		AlertSMTPFrom:      strings.TrimSpace(getenv("ALERT_SMTP_FROM")),
+		AlertTelegramToken: strings.TrimSpace(getenv("ALERT_TELEGRAM_TOKEN")),
 	}
 	if cfg.Env == EnvProduction && cfg.DevTenantSlug != "" {
 		problems = append(problems, errors.New("TENANT_DEV must be empty in production"))
@@ -103,6 +138,20 @@ func httpAddr(getenv func(string) string) string {
 		return ":" + port
 	}
 	return ":8080"
+}
+
+// parsePort reads an SMTP port. An empty value is the zero port, which simply
+// leaves the mail channel off; anything else must be a real port number.
+func parsePort(raw string) (int, error) {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return 0, nil
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 1 || n > 65535 {
+		return 0, fmt.Errorf("ALERT_SMTP_PORT %q: want a port between 1 and 65535", raw)
+	}
+	return n, nil
 }
 
 func validateDatabaseURL(raw string) error {

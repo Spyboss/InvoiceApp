@@ -8,6 +8,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+
+	"github.com/spyboss/invoiceapp/internal/money"
 )
 
 // The sections of a closed day, in the order the z report prints them.
@@ -297,6 +299,44 @@ func (s *Store) CloseDay(ctx context.Context, tenantID, closedBy uuid.UUID, p Da
 				return DayEnd{}, fmt.Errorf("store day end line: %w", err)
 			}
 		}
+	}
+
+	// C7 and C12: a drawer past the tenant's limit is told to somebody, in
+	// the same transaction as the close, so a crash cannot leave an unexplained
+	// variance with nobody alerted. A tenant that has set no limit alerts on
+	// any difference at all, which is the careful default.
+	settings, err := s.SettingsFor(ctx, tenantID)
+	if err != nil {
+		return DayEnd{}, err
+	}
+	over := variance
+	if over < 0 {
+		over = -over
+	}
+	if over > settings.VarianceAlertCents {
+		severity := SeverityWarning
+		if variance < 0 {
+			severity = SeverityCritical
+		}
+		word := "over"
+		if variance < 0 {
+			word = "short"
+		}
+		if _, err := s.RecordAlert(ctx, tenantID, AlertParams{
+			Kind:     AlertVariance,
+			Message:  fmt.Sprintf("Z %s for %s closed %s by Rs %s. Expected Rs %s, counted Rs %s.", zNo, p.Window.Date.Format("2006-01-02"), word, money.Format(over), money.Format(expected), money.Format(p.CountedCents)),
+			Severity: severity,
+			Entity:   "Z-" + zNo,
+		}); err != nil {
+			return DayEnd{}, err
+		}
+	}
+
+	// C2: the day that is closing is also the moment to check the series it
+	// drew numbers from. A gap is alerted, never tolerated, and it lands in
+	// the same transaction as the z so the two cannot disagree.
+	if _, err := s.RecordNumberingGapAlerts(ctx, tenantID, alertYear(p.Window)); err != nil {
+		return DayEnd{}, err
 	}
 
 	return s.DayEndByID(ctx, tenantID, id)

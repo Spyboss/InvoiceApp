@@ -14,6 +14,7 @@ import (
 	"github.com/spyboss/invoiceapp/internal/buildinfo"
 	"github.com/spyboss/invoiceapp/internal/config"
 	"github.com/spyboss/invoiceapp/internal/db"
+	"github.com/spyboss/invoiceapp/internal/notify"
 	"github.com/spyboss/invoiceapp/internal/pdf"
 	"github.com/spyboss/invoiceapp/internal/store"
 	"github.com/spyboss/invoiceapp/internal/tenant"
@@ -58,6 +59,28 @@ func run() error {
 	st := store.New(pool)
 	resolver := tenant.NewResolver(st, cfg.DevTenantSlug)
 
+	// Alert delivery. Both channels are optional; with neither set the alerts
+	// still queue and still show on the /alerts page, they just leave the
+	// building by no route.
+	alertSender := &notify.Sender{Store: st}
+	if mailer := (notify.SMTPMailer{
+		Host:     cfg.AlertSMTPHost,
+		Port:     cfg.AlertSMTPPort,
+		Username: cfg.AlertSMTPUsername,
+		Password: cfg.AlertSMTPPassword,
+		From:     cfg.AlertSMTPFrom,
+	}); mailer.Available() {
+		alertSender.Mail = mailer
+	} else if cfg.AlertSMTPHost != "" {
+		// Config.Load refuses a half set relay, so this is belt and braces
+		// rather than a second opinion.
+		log.Warn("alert email is configured but incomplete; the channel stays off",
+			"host", cfg.AlertSMTPHost)
+	}
+	if telegram := (notify.TelegramNotifier{Token: cfg.AlertTelegramToken}); telegram.Available() {
+		alertSender.Notifier = telegram
+	}
+
 	srv := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: web.New(web.Deps{
@@ -68,6 +91,7 @@ func run() error {
 			ForgetTenant:  resolver.Forget,
 			SecureCookies: cfg.Env != config.EnvDev,
 			PDF:           pdf.New(cfg.GotenbergURL, cfg.GotenbergUsername, cfg.GotenbergPassword),
+			Alerts:        alertSender,
 		}),
 		ReadHeaderTimeout: 10 * time.Second,
 		ReadTimeout:       30 * time.Second,

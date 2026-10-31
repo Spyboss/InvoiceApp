@@ -1,0 +1,90 @@
+package views
+
+import "time"
+
+type AlertRow struct {
+	Kind      string
+	KindLabel string
+	Message   string
+	Severity  string
+	Status    string
+	Attempts  int
+	LastError string
+	At        time.Time
+	Sent      string
+}
+
+type AlertsData struct {
+	TenantName string
+	UserName   string
+	Nav        []NavLink
+	Rows       []AlertRow
+	// Delivery says where these go besides this page, in the owner's own
+	// words from settings: nothing configured means the page is the only
+	// place they land.
+	Email    string
+	Telegram string
+}
+
+templ Alerts(d AlertsData) {
+	@Layout("Alerts", d.TenantName, d.UserName, d.Nav, alertsBody(d))
+}
+
+templ alertsBody(d AlertsData) {
+	<article class="wide">
+		<header>
+			<h1>Alerts</h1>
+			<p class="muted">Things that needed a person: a void, a drawer past its limit, a missing number. Newest first.</p>
+		</header>
+
+		if d.Email == "" && d.Telegram == "" {
+			<p role="status">No alert channel is set in settings, so everything lands on this page only.</p>
+		} else {
+			<p class="muted">
+				if d.Email != "" {
+					Sent to { d.Email }.
+				}
+				if d.Telegram != "" {
+					Sent to the Telegram chat { d.Telegram }.
+				}
+			</p>
+		}
+
+		if len(d.Rows) == 0 {
+			<p>Nothing has fired. That is the good answer.</p>
+		} else {
+			<div class="table-scroll">
+				<table>
+					<thead>
+						<tr>
+							<th scope="col">When (UTC)</th>
+							<th scope="col">What</th>
+							<th scope="col">Detail</th>
+							<th scope="col">Severity</th>
+							<th scope="col">Delivery</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, row := range d.Rows {
+							<tr>
+								<td>{ row.At.UTC().Format("2006-01-02 15:04:05") }</td>
+								<td><strong>{ row.KindLabel }</strong></td>
+								<td>{ row.Message }</td>
+								<td><span class="status">{ row.Severity }</span></td>
+								<td>
+									<span class="status">{ row.Status }</span>
+									if row.Attempts > 1 {
+										<small>{ row.Attempts } tries</small>
+									}
+									if row.LastError != "" {
+										<small>{ row.LastError }</small>
+									}
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	</article>
+}

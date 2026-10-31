@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/spyboss/invoiceapp/internal/auth"
 	"github.com/spyboss/invoiceapp/internal/httpx"
 	"github.com/spyboss/invoiceapp/internal/store"
@@ -24,6 +26,16 @@ type Deps struct {
 	SecureCookies bool
 	Now           func() time.Time
 	PDF           PDFRenderer
+	// Alerts pushes a queued alert out over email or telegram. It is nil when
+	// the deployment has neither channel, and then the alerts still queue and
+	// still show on the /alerts page.
+	Alerts AlertDelivery
+}
+
+// AlertDelivery is the sending half of the alert queue. It is an interface so
+// the web tests can prove an alert is recorded and delivered without a relay.
+type AlertDelivery interface {
+	DeliverPending(ctx context.Context, tenantID uuid.UUID) (int, error)
 }
 
 type Server struct {
@@ -37,6 +49,7 @@ type Server struct {
 	secure   bool
 	now      func() time.Time
 	pdf      PDFRenderer
+	alerts   AlertDelivery
 }
 
 func New(d Deps) http.Handler {
@@ -55,6 +68,7 @@ func New(d Deps) http.Handler {
 		secure:   d.SecureCookies,
 		now:      now,
 		pdf:      d.PDF,
+		alerts:   d.Alerts,
 	}
 	s.auth.Now = now
 
@@ -101,6 +115,9 @@ func New(d Deps) http.Handler {
 	mux.Handle("GET /documents/{id}", s.requirePermission("document.read", s.documentPage()))
 	mux.Handle("GET /documents/{id}/pdf", s.requirePermission("document.read", s.documentPDF()))
 	mux.Handle("GET /documents/{id}/payment", s.requirePermission("payment.record", s.paymentNewPage()))
+	mux.Handle("POST /documents/{id}/void", s.requirePermission("document.void", s.documentVoid()))
+
+	mux.Handle("GET /alerts", s.requirePermission("alert.view", s.alertsPage()))
 
 	mux.Handle("GET /payments", s.requirePermission("payment.read", s.paymentsPage()))
 	mux.Handle("POST /payments", s.requirePermission("payment.record", s.paymentCreate()))

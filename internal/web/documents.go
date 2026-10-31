@@ -206,6 +206,7 @@ func (s *Server) documentNewPage() http.HandlerFunc {
 			QuoteNo:       quoteNo,
 			CustomerLabel: customerLabel,
 			VehicleLabel:  vehicleLabel,
+			CanApprove:    auth.Can(r.Context(), "document.approve"),
 		}))
 	}
 }
@@ -223,6 +224,34 @@ func (s *Server) documentCreate() http.HandlerFunc {
 			s.renderDocumentFormError(w, r, t, u, http.StatusBadRequest, fields, message)
 			return
 		}
+		// The business date the server thinks it is, so the backdate rule
+		// compares against the dealership's day rather than UTC.
+		params.Today = businessToday(s.now())
+
+		// C8 and C9: a discount past the tenant's percent or a date past the
+		// tenant's limit needs a manager's pin. The pin is the manager's own
+		// password, so a clerk cannot forge it: the credentials are
+		// re-authenticated here against this tenant's users and then checked
+		// against the effective document.approve permission.
+		pinEmail := strings.ToLower(strings.TrimSpace(r.PostFormValue("approver_email")))
+		pinPassword := r.PostFormValue("approver_password")
+		pinNote := strings.TrimSpace(r.PostFormValue("approval_note"))
+		if pinEmail != "" || pinPassword != "" {
+			approver, pinProblem, pinErr := s.authenticateApprover(r, t.ID, pinEmail, pinPassword)
+			if pinErr != nil {
+				s.internalError(w, r, "approver", pinErr)
+				return
+			}
+			if pinProblem != "" {
+				s.renderDocumentApprovalError(w, r, t, u, fields, views.ApprovalPin{
+					Email: pinEmail,
+					Note:  pinNote,
+				}, pinProblem)
+				return
+			}
+			params.ApprovedBy = &approver
+			params.ApprovalNote = pinNote
+		}
 
 		var res store.DocumentResult
 		err := s.store.InTenant(r.Context(), t.ID, func(q *store.Store) error {
@@ -232,19 +261,28 @@ func (s *Server) documentCreate() http.HandlerFunc {
 				return err
 			}
 			d := res.Document
+			after := map[string]string{
+				"type":     d.DocType,
+				"number":   d.DocNo,
+				"customer": d.CustomerName,
+				"vehicle":  d.VehicleChassisNo,
+				"price":    money.Format(d.PriceCents),
+				"down":     money.Format(d.DownCents),
+				"balance":  money.Format(d.BalanceCents),
+			}
+			// C8 and C9: both people end up on the audit row, so the log
+			// says who sold it and who signed the price or date off.
+			if d.ApprovedBy != nil {
+				after["approved_by"] = d.ApprovedBy.String()
+				if d.ApprovalNote != "" {
+					after["approval_note"] = d.ApprovalNote
+				}
+			}
 			if err := audit.Write(r.Context(), q, t.ID, &u.User, httpx.ClientIP(r.Context()), r.UserAgent(), audit.Entry{
 				Action:   "document.create",
 				Entity:   "document",
 				EntityID: &d.ID,
-				After: map[string]string{
-					"type":     d.DocType,
-					"number":   d.DocNo,
-					"customer": d.CustomerName,
-					"vehicle":  d.VehicleChassisNo,
-					"price":    money.Format(d.PriceCents),
-					"down":     money.Format(d.DownCents),
-					"balance":  money.Format(d.BalanceCents),
-				},
+				After:    after,
 			}); err != nil {
 				return err
 			}
@@ -286,6 +324,16 @@ func (s *Server) documentCreate() http.HandlerFunc {
 		})
 		if err != nil {
 			switch {
+			case errors.Is(err, store.ErrNeedsApproval):
+				// C8 or C9 tripped. Say which rule and by how much, using
+				// the tenant's own numbers, and open the pin so the manager
+				// can sign it off without the clerk retyping anything.
+				reason, reasonErr := s.approvalReason(r, t.ID, params)
+				if reasonErr != nil {
+					s.internalError(w, r, "approval reason", reasonErr)
+					return
+				}
+				s.renderDocumentApprovalError(w, r, t, u, fields, views.ApprovalPin{Note: pinNote}, reason)
 			case errors.Is(err, store.ErrVehicleUnavailable):
 				s.renderDocumentFormError(w, r, t, u, http.StatusConflict, fields,
 					"That unit is no longer available. Pick another vehicle.")
@@ -324,6 +372,7 @@ func (s *Server) documentPage() http.HandlerFunc {
 		var d store.Document
 		var balance store.DocumentBalance
 		var receipts []store.Payment
+		var approverName, voiderName string
 		isInvoice := false
 		err := s.store.InTenant(r.Context(), t.ID, func(q *store.Store) error {
 			var err error
@@ -332,6 +381,18 @@ func (s *Server) documentPage() http.HandlerFunc {
 				return err
 			}
 			isInvoice = d.DocType == store.DocSalesCash || d.DocType == store.DocSalesLease
+			// The approval and the void each name a person, so the page can
+			// say who rather than show an id.
+			if d.ApprovedBy != nil {
+				if approver, err := q.UserByID(r.Context(), t.ID, *d.ApprovedBy); err == nil {
+					approverName = approver.Name
+				}
+			}
+			if d.VoidedBy != nil {
+				if voidedBy, err := q.UserByID(r.Context(), t.ID, *d.VoidedBy); err == nil {
+					voiderName = voidedBy.Name
+				}
+			}
 			if !isInvoice {
 				return nil
 			}
@@ -362,46 +423,175 @@ func (s *Server) documentPage() http.HandlerFunc {
 			}
 		}
 
-		s.render(w, r, http.StatusOK, views.DocumentDetail(views.DocumentDetailData{
-			TenantName:      t.Name,
-			UserName:        u.User.Name,
-			Nav:             navLinks(r.Context(), r.URL.Path),
-			ID:              d.ID.String(),
-			TypeLabel:       documentTypeLabel(d.DocType),
-			DocNo:           d.DocNo,
-			Date:            d.DocDate.Format("02/01/2006"),
-			Status:          d.Status,
-			Created:         r.URL.Query().Get("created") == "1",
-			CustomerID:      d.CustomerID.String(),
-			CustomerName:    d.CustomerName,
-			CustomerNIC:     d.CustomerNIC,
-			CustomerPhone:   d.CustomerPhone,
-			CustomerAddress: d.CustomerAddress,
-			VehicleID:       d.VehicleID.String(),
-			VehicleLine:     strings.TrimSpace(d.VehicleMake + " " + d.VehicleModel),
-			Chassis:         d.VehicleChassisNo,
-			Engine:          d.VehicleEngineNo,
-			Colour:          d.VehicleColour,
-			Type:            d.VehicleType,
-			YOM:             documentYOM(d.VehicleYOM),
-			Price:           money.Format(d.PriceCents),
-			Down:            money.Format(d.DownCents),
-			Balance:         money.Format(d.BalanceCents),
-			FinanceCompany:  d.FinanceCompany,
-			FinanceAddress:  d.FinanceAddress,
-			Notes:           d.Notes,
-			CanCreate:       auth.Can(r.Context(), "document.create"),
-			CanPrint:        s.pdf != nil,
-			IsQuote:         d.DocType == store.DocQuotation,
-			IsOpenQuote:     d.DocType == store.DocQuotation && d.Status == store.DocOpen,
-			IsInvoice:       isInvoice,
-			CanSeePayments:  canSeePayments,
-			CanTakePayment:  isInvoice && balance.OutstandingCents > 0 && auth.Can(r.Context(), "payment.record"),
-			Paid:            money.Format(balance.PaidCents),
-			Outstanding:     money.Format(balance.OutstandingCents),
-			Receipts:        receiptRows(receipts),
-		}))
+		s.renderDocumentDetail(w, r, t, u, d, isInvoice, balance, receipts, approverName, voiderName, "")
 	}
+}
+
+// renderDocumentDetail draws the one document screen. It is shared by the
+// ordinary read and by a void that was refused, so the page the person gets
+// back after a refusal is the same page with the reason on it.
+func (s *Server) renderDocumentDetail(w http.ResponseWriter, r *http.Request, t store.Tenant, u auth.SignedIn, d store.Document, isInvoice bool, balance store.DocumentBalance, receipts []store.Payment, approverName, voiderName, voidError string) {
+	s.render(w, r, http.StatusOK, views.DocumentDetail(views.DocumentDetailData{
+		TenantName:      t.Name,
+		UserName:        u.User.Name,
+		Nav:             navLinks(r.Context(), r.URL.Path),
+		ID:              d.ID.String(),
+		TypeLabel:       documentTypeLabel(d.DocType),
+		DocNo:           d.DocNo,
+		Date:            d.DocDate.Format("02/01/2006"),
+		Status:          d.Status,
+		Created:         r.URL.Query().Get("created") == "1",
+		CustomerID:      d.CustomerID.String(),
+		CustomerName:    d.CustomerName,
+		CustomerNIC:     d.CustomerNIC,
+		CustomerPhone:   d.CustomerPhone,
+		CustomerAddress: d.CustomerAddress,
+		VehicleID:       d.VehicleID.String(),
+		VehicleLine:     strings.TrimSpace(d.VehicleMake + " " + d.VehicleModel),
+		Chassis:         d.VehicleChassisNo,
+		Engine:          d.VehicleEngineNo,
+		Colour:          d.VehicleColour,
+		Type:            d.VehicleType,
+		YOM:             documentYOM(d.VehicleYOM),
+		Price:           money.Format(d.PriceCents),
+		Down:            money.Format(d.DownCents),
+		Balance:         money.Format(d.BalanceCents),
+		FinanceCompany:  d.FinanceCompany,
+		FinanceAddress:  d.FinanceAddress,
+		Notes:           d.Notes,
+		CanCreate:       auth.Can(r.Context(), "document.create"),
+		CanPrint:        s.pdf != nil,
+		IsQuote:         d.DocType == store.DocQuotation,
+		IsOpenQuote:     d.DocType == store.DocQuotation && d.Status == store.DocOpen,
+		IsInvoice:       isInvoice,
+		CanSeePayments:  isInvoice && auth.Can(r.Context(), "payment.read"),
+		CanTakePayment:  isInvoice && d.Status != store.DocVoid && balance.OutstandingCents > 0 && auth.Can(r.Context(), "payment.record"),
+		Paid:            money.Format(balance.PaidCents),
+		Outstanding:     money.Format(balance.OutstandingCents),
+		Receipts:        receiptRows(receipts),
+		CSRFToken:       csrfToken(r.Context()),
+		CanVoid:         d.Status != store.DocVoid && auth.Can(r.Context(), "document.void"),
+		Voided:          d.Status == store.DocVoid,
+		VoidName:        voiderName,
+		VoidedAt:        documentTimestamp(d.VoidedAt),
+		VoidReason:      d.VoidReason,
+		VoidError:       voidError,
+		ApprovalName:    approverName,
+		ApprovalAt:      documentTimestamp(d.ApprovedAt),
+		ApprovalNote:    d.ApprovalNote,
+	}))
+}
+
+// documentTimestamp renders one of the two moments an issued document can gain
+// (an approval, a void), or nothing when it has not happened.
+func documentTimestamp(t *time.Time) string {
+	if t == nil {
+		return ""
+	}
+	return t.In(colombo).Format("02/01/2006 15:04")
+}
+
+// documentVoid is the only way a document leaves the ledger (C4). It keeps the
+// paper and adds who, when and why, reverses the stock the document moved, and
+// records the alert in the same transaction as the void itself, so a crash
+// cannot leave an unexplained void with nobody told.
+func (s *Server) documentVoid() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		t, u, ok := s.pageUser(r)
+		if !ok {
+			redirectToLogin(w, r)
+			return
+		}
+		id, ok := pathID(r)
+		if !ok {
+			s.renderError(w, r, http.StatusNotFound, "Document not found", "There is nothing at this address.")
+			return
+		}
+		reason := strings.TrimSpace(r.PostFormValue("reason"))
+
+		var d store.Document
+		err := s.store.InTenant(r.Context(), t.ID, func(q *store.Store) error {
+			var err error
+			d, err = q.VoidDocument(r.Context(), t.ID, id, u.User.ID, reason, businessToday(s.now()))
+			if err != nil {
+				return err
+			}
+			if err := audit.Write(r.Context(), q, t.ID, &u.User, httpx.ClientIP(r.Context()), r.UserAgent(), audit.Entry{
+				Action:   "document.void",
+				Entity:   "document",
+				EntityID: &d.ID,
+				Before:   map[string]string{"status": store.DocIssued},
+				After: map[string]string{
+					"status": d.Status,
+					"reason": d.VoidReason,
+					"doc_no": d.DocNo,
+				},
+			}); err != nil {
+				return err
+			}
+			// C12: a void is always told to somebody. The alert is written
+			// inside this transaction, so the record and the message cannot
+			// disagree.
+			_, err = q.RecordAlert(r.Context(), t.ID, store.AlertParams{
+				Kind:     store.AlertVoid,
+				Message:  documentTypeLabel(d.DocType) + " " + d.DocNo + " was voided by " + u.User.Name + ": " + d.VoidReason,
+				Severity: store.SeverityWarning,
+				Entity:   d.DocNo,
+			})
+			return err
+		})
+		switch {
+		case err == nil:
+			// The alert is already on the record from inside the transaction;
+			// this is only the push out of the building, and a failure here
+			// leaves it queued for the next attempt.
+			s.deliverAlerts(t.ID)
+			http.Redirect(w, r, "/documents/"+id.String()+"?voided=1", http.StatusSeeOther)
+		case errors.Is(err, store.ErrInvalidDocument):
+			s.voidFormBack(w, r, t, u, id, "Give a reason before voiding. A void cannot be undone, and a converted quotation cannot be voided on its own.")
+		case errors.Is(err, store.ErrDayAlreadyClosed):
+			s.voidFormBack(w, r, t, u, id, "This day is already closed. A void is dated the day it happens, so it cannot land on a closed z.")
+		case errors.Is(err, store.ErrNotFound):
+			s.renderError(w, r, http.StatusNotFound, "Document not found", "That document may have been removed.")
+		default:
+			s.internalError(w, r, "document void", err)
+		}
+	}
+}
+
+// voidFormBack puts the document page up again with the refusal on it and the
+// reason the person typed still in the box.
+func (s *Server) voidFormBack(w http.ResponseWriter, r *http.Request, t store.Tenant, u auth.SignedIn, id uuid.UUID, message string) {
+	var d store.Document
+	var balance store.DocumentBalance
+	var receipts []store.Payment
+	var approverName, voiderName string
+	err := s.store.InTenant(r.Context(), t.ID, func(q *store.Store) error {
+		var err error
+		d, err = q.DocumentByID(r.Context(), t.ID, id)
+		return err
+	})
+	if err != nil {
+		s.internalError(w, r, "document", err)
+		return
+	}
+	isInvoice := d.DocType == store.DocSalesCash || d.DocType == store.DocSalesLease
+	if isInvoice {
+		err = s.store.InTenant(r.Context(), t.ID, func(q *store.Store) error {
+			var err error
+			balance, err = q.DocumentBalanceFor(r.Context(), t.ID, id)
+			if err != nil {
+				return err
+			}
+			receipts, err = q.ListPayments(r.Context(), t.ID, store.PaymentFilter{DocumentID: &id, Limit: 100})
+			return err
+		})
+		if err != nil {
+			s.internalError(w, r, "document receipts", err)
+			return
+		}
+	}
+	s.renderDocumentDetail(w, r, t, u, d, isInvoice, balance, receipts, approverName, voiderName, message)
 }
 
 func (s *Server) documentPDF() http.HandlerFunc {
@@ -601,6 +791,116 @@ func (s *Server) renderDocumentFormError(w http.ResponseWriter, r *http.Request,
 		CustomerLabel: customerLabel,
 		VehicleLabel:  vehicleLabel,
 		Error:         message,
+		CanApprove:    auth.Can(r.Context(), "document.approve"),
+	}))
+}
+
+// authenticateApprover re-checks a manager's pin. The pin is the manager's own
+// password, so the clerk at the counter cannot forge an approval: the
+// credentials are verified against this tenant's users and then checked
+// against the effective document.approve permission, which a per-user override
+// may have taken away from the role. The second return is the sentence the
+// person at the screen reads, or empty when the pin is good.
+func (s *Server) authenticateApprover(r *http.Request, tenantID uuid.UUID, email, password string) (uuid.UUID, string, error) {
+	if email == "" || password == "" {
+		return uuid.Nil, "Enter the manager's email and password, or leave both blank.", nil
+	}
+	var (
+		approver uuid.UUID
+		problem  string
+	)
+	err := s.store.InTenant(r.Context(), tenantID, func(q *store.Store) error {
+		u, err := q.UserByEmail(r.Context(), tenantID, email)
+		if err != nil {
+			return err
+		}
+		if !u.IsActive {
+			problem = "That manager's account is not active."
+			return nil
+		}
+		ok, err := auth.VerifyPassword(u.PasswordHash, password)
+		if err != nil || !ok {
+			problem = "That manager's password did not match."
+			return nil
+		}
+		can, err := q.ApproverCan(r.Context(), tenantID, u.ID)
+		if err != nil {
+			return err
+		}
+		if !can {
+			problem = "That user is not allowed to approve documents."
+			return nil
+		}
+		approver = u.ID
+		return nil
+	})
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return uuid.Nil, "No active user with that email in this dealership.", nil
+		}
+		return uuid.Nil, "", err
+	}
+	return approver, problem, nil
+}
+
+// approvalReason turns the rule that tripped into the sentence the counter
+// reads, in the tenant's own numbers rather than a generic warning.
+func (s *Server) approvalReason(r *http.Request, tenantID uuid.UUID, p store.DocumentParams) (string, error) {
+	var reason store.ApprovalReason
+	var needed bool
+	err := s.store.InTenant(r.Context(), tenantID, func(q *store.Store) error {
+		var err error
+		reason, needed, err = q.ApprovalNeeded(r.Context(), tenantID, p.DocType, p.PriceCents, p.VehicleID, p.DocDate, p.Today)
+		return err
+	})
+	if err != nil {
+		return "", err
+	}
+	if !needed {
+		// The store refused for a reason this handler has not seen; say
+		// something honest rather than inventing a rule.
+		return "This document needs a manager to approve it.", nil
+	}
+	switch reason.Kind {
+	case "DISCOUNT":
+		return fmt.Sprintf(
+			"This price is %d%% below the listed price. The limit without approval is %d%%, so a manager has to sign it off.",
+			reason.Percent, reason.Limit), nil
+	case "BACKDATE":
+		return fmt.Sprintf(
+			"This document is dated %d days back. The limit without approval is %d days, so a manager has to sign it off.",
+			reason.Days, reason.LimitD), nil
+	}
+	return "This document needs a manager to approve it.", nil
+}
+
+// renderDocumentApprovalError puts the form back on screen with the pin block
+// open, the reason it is needed, and whatever the clerk had already typed
+// (never the password).
+func (s *Server) renderDocumentApprovalError(w http.ResponseWriter, r *http.Request, t store.Tenant, u auth.SignedIn, fields views.DocumentFields, pin views.ApprovalPin, message string) {
+	customers, vehicles, err := s.documentOptions(r.Context(), t.ID)
+	if err != nil {
+		s.internalError(w, r, "document options", err)
+		return
+	}
+	s.render(w, r, http.StatusBadRequest, views.DocumentForm(views.DocumentFormData{
+		TenantName:     t.Name,
+		UserName:       u.User.Name,
+		Nav:            navLinks(r.Context(), r.URL.Path),
+		CSRFToken:      csrfToken(r.Context()),
+		Action:         "/documents",
+		Heading:        "New document",
+		Submit:         "Issue document",
+		Cancel:         "/documents",
+		Fields:         fields,
+		Customers:      customers,
+		Vehicles:       vehicles,
+		Types:          documentTypeOptions(fields.DocType, fields.QuoteID != "", false),
+		QuoteLocked:    fields.QuoteID != "",
+		ApprovalNeeded: true,
+		ApprovalReason: message,
+		Approval:       pin,
+		CanApprove:     auth.Can(r.Context(), "document.approve"),
 	}))
 }
 

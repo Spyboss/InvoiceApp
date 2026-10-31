@@ -80,6 +80,10 @@ func (s *Server) dayEndClose() http.HandlerFunc {
 			})
 			switch {
 			case err == nil:
+				// A variance past the threshold, or a missing number, is
+				// already on the record from inside the transaction. This is
+				// only the push out of the building.
+				s.deliverAlerts(t.ID)
 				http.Redirect(w, r, "/day-end/"+end.ID.String()+"?closed=1", http.StatusSeeOther)
 				return
 			case errors.Is(err, store.ErrDayAlreadyClosed):
