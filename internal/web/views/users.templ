@@ -1,0 +1,113 @@
+package views
+
+type UserRow struct {
+	ID         string
+	Name       string
+	Email      string
+	Role       string
+	RoleKey    string
+	Active     bool
+	ActiveStr  string
+	LastLogin  string
+}
+
+type UsersData struct {
+	TenantName string
+	UserName   string
+	Nav        []NavLink
+	CSRFToken  string
+	CanManage  bool
+	Roles      []RoleOption
+	Rows       []UserRow
+}
+
+type RoleOption struct {
+	Key   string
+	Label string
+}
+
+templ Users(d UsersData) {
+	@Layout("Users", d.TenantName, d.UserName, d.Nav, usersBody(d))
+}
+
+templ usersBody(d UsersData) {
+	<article class="wide">
+		<header>
+			<h1>Users</h1>
+			<p class="muted">Who can sign in, what they are allowed to change, and who last signed in.</p>
+		</header>
+
+		if !d.CanManage {
+			<p role="status">Only the owner can change who can sign in.</p>
+		}
+
+		if len(d.Rows) == 0 {
+			<p>No users.</p>
+		} else {
+			<div class="table-scroll">
+				<table>
+					<thead>
+						<tr>
+							<th scope="col">Name</th>
+							<th scope="col">Email</th>
+							<th scope="col">Role</th>
+							<th scope="col">Active</th>
+							<th scope="col">Last sign in (UTC)</th>
+							if d.CanManage {
+								<th scope="col">Actions</th>
+							}
+						</tr>
+					</thead>
+					<tbody>
+						for _, row := range d.Rows {
+							<tr>
+								<td>{ row.Name }</td>
+								<td>{ row.Email }</td>
+								<td>{ row.Role }</td>
+								<td>{ row.ActiveStr }</td>
+								<td>{ row.LastLogin }</td>
+								if d.CanManage {
+									<td>
+										<div class="inline-actions">
+											<form method="post" action={ "/users/" + row.ID + "/role" } class="inline">
+												<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
+												<select name="role">
+													for _, role := range d.Roles {
+														if role.Key == row.RoleKey {
+															<option value={ role.Key } selected>{ role.Label }</option>
+														} else {
+															<option value={ role.Key }>{ role.Label }</option>
+														}
+													}
+												</select>
+												<button type="submit">Change role</button>
+											</form>
+											if row.Active {
+												<form method="post" action={ "/users/" + row.ID + "/active" } class="inline">
+													<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
+													<input type="hidden" name="active" value="0"/>
+													<button type="submit" class="secondary">Deactivate</button>
+												</form>
+											} else {
+												<form method="post" action={ "/users/" + row.ID + "/active" } class="inline">
+													<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
+													<input type="hidden" name="active" value="1"/>
+													<button type="submit">Activate</button>
+												</form>
+											}
+											<form method="post" action={ "/users/" + row.ID + "/password" } class="inline">
+												<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
+												<input type="password" name="new_password" placeholder="New password" minlength="12" required/>
+												<button type="submit" class="secondary">Reset password</button>
+											</form>
+										</div>
+									</td>
+								}
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	</article>
+}

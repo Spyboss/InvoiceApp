@@ -22,6 +22,9 @@ var (
 	ErrPaymentNotReversible = errors.New("the receipt cannot be reversed")
 	ErrDayAlreadyClosed     = errors.New("this day is already closed")
 	ErrInvalidDayEnd        = errors.New("the day end details are not valid")
+	ErrInvalidSettings      = errors.New("the settings are not valid")
+	ErrInvalidUser          = errors.New("the user details are not valid")
+	ErrLastOwner            = errors.New("a dealership needs one active owner")
 )
 
 // constraintName returns the unique index that rejected the write, if any.

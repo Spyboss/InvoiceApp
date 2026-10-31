@@ -69,6 +69,14 @@ func New(d Deps) http.Handler {
 	mux.Handle("GET /{$}", s.requireUser(s.homePage()))
 	mux.Handle("GET /audit", s.requirePermission("audit.view", s.auditPage()))
 
+	mux.Handle("GET /settings", s.requirePermission("settings.write", s.settingsPage()))
+	mux.Handle("POST /settings", s.requirePermission("settings.write", s.settingsSave()))
+
+	mux.Handle("GET /users", s.requirePermission("user.manage", s.usersPage()))
+	mux.Handle("POST /users/{id}/role", s.requirePermission("user.manage", s.userRolePage()))
+	mux.Handle("POST /users/{id}/active", s.requirePermission("user.manage", s.userActivePage()))
+	mux.Handle("POST /users/{id}/password", s.requirePermission("user.manage", s.userPasswordPage()))
+
 	mux.Handle("GET /customers", s.requirePermission("customer.read", s.customersPage()))
 	mux.Handle("GET /customers/new", s.requirePermission("customer.write", s.customerNewPage()))
 	mux.Handle("POST /customers", s.requirePermission("customer.write", s.customerCreate()))

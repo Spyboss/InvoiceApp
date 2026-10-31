@@ -41,6 +41,8 @@ func navLinks(ctx context.Context, path string) []views.NavLink {
 		{"/day-end", "Day end", "dayend.read"},
 		{"/reports", "Reports", "report.view"},
 		{"/audit", "Audit", "audit.view"},
+		{"/settings", "Settings", "settings.write"},
+		{"/users", "Users", "user.manage"},
 	}
 
 	links := make([]views.NavLink, 0, len(candidates))
