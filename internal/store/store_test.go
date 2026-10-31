@@ -348,3 +348,66 @@ func hashOf(token string) []byte {
 	sum := sha256.Sum256([]byte(token))
 	return sum[:]
 }
+
+func TestLastOwnerCannotBeRemoved(t *testing.T) {
+	st := freshStore(t)
+	a := newTenant(t, st, "G", "g.local")
+	o := newUser(t, st, a.ID, "o@g.local", store.RoleOwner)
+
+	err := st.InTenant(context.Background(), a.ID, func(q *store.Store) error {
+		_, err := q.UpdateUserRole(context.Background(), a.ID, o.ID, store.RoleManager)
+		return err
+	})
+	if err == nil {
+		t.Fatalf("expected refusal removing the last owner")
+	}
+}
+
+func TestListUsersSeesEveryone(t *testing.T) {
+	st := freshStore(t)
+	a := newTenant(t, st, "H", "h.local")
+	newUser(t, st, a.ID, "a@h.local", store.RoleSales)
+	newUser(t, st, a.ID, "b@h.local", store.RoleAccounts)
+
+	var users []store.User
+	err := st.InTenant(context.Background(), a.ID, func(q *store.Store) error {
+		u, err := q.ListUsers(context.Background(), a.ID)
+		users = u
+		return err
+	})
+	if err != nil {
+		t.Fatalf("list users: %v", err)
+	}
+	if len(users) < 2 {
+		t.Fatalf("users = %d, want at least 2", len(users))
+	}
+}
+
+func TestPermissionOverrideWorks(t *testing.T) {
+	st := freshStore(t)
+	a := newTenant(t, st, "I", "i.local")
+	u := newUser(t, st, a.ID, "u@i.local", store.RoleSales)
+
+	err := st.InTenant(context.Background(), a.ID, func(q *store.Store) error {
+		return q.SetPermissionOverride(context.Background(), a.ID, u.ID, "customer.write", boolPtr(true))
+	})
+	if err != nil {
+		t.Fatalf("grant: %v", err)
+	}
+
+	var overrides map[string]bool
+	err = st.InTenant(context.Background(), a.ID, func(q *store.Store) error {
+		var err error
+		overrides, err = q.PermissionOverridesFor(context.Background(), a.ID, u.ID)
+		return err
+	})
+	if err != nil {
+		t.Fatalf("read overrides: %v", err)
+	}
+	if !overrides["customer.write"] {
+		t.Fatalf("override not granted")
+	}
+}
+
+func boolPtr(b bool) *bool { return &b }
+
