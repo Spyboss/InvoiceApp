@@ -33,6 +33,9 @@ func leasedSaleOn(t *testing.T, st *store.Store, tenantID, actorID uuid.UUID, ch
 		PriceCents:     price,
 		DownCents:      down,
 		FinanceCompany: "SINGER FINANCE",
+		// These tests predate approvals, so they declare their own business
+		// day: the document is dated the day it is issued, not backdated.
+		Today: docDate,
 	})
 	if err != nil {
 		t.Fatalf("leasing sale: %v", err)

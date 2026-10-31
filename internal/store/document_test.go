@@ -44,6 +44,13 @@ func int32Ptr(v int32) *int32 { return &v }
 
 func createDocument(t *testing.T, st *store.Store, tenantID, actorID uuid.UUID, p store.DocumentParams) (store.DocumentResult, error) {
 	t.Helper()
+	// Tests that predate approvals date their documents and never declare a
+	// business day. For those, the document is issued the day it is dated, so
+	// the backdate rule never trips. A test that wants to prove the rule
+	// passes Today itself and this default stays out of the way.
+	if p.Today.IsZero() && !p.DocDate.IsZero() {
+		p.Today = p.DocDate
+	}
 	var res store.DocumentResult
 	err := st.InTenant(context.Background(), tenantID, func(q *store.Store) error {
 		var err error

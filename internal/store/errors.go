@@ -25,6 +25,7 @@ var (
 	ErrInvalidSettings      = errors.New("the settings are not valid")
 	ErrInvalidUser          = errors.New("the user details are not valid")
 	ErrLastOwner            = errors.New("a dealership needs one active owner")
+	ErrInvalidAlert         = errors.New("the alert is not valid")
 )
 
 // constraintName returns the unique index that rejected the write, if any.

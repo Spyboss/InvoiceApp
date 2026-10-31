@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 )
@@ -50,15 +51,31 @@ type Document struct {
 	CreatedBy *uuid.UUID
 	CreatedAt time.Time
 	UpdatedAt time.Time
+
+	// Who signed off a discount or a date past the tenant's limit, and why.
+	// Both are nil on the ordinary document where nothing needed a pin.
+	ApprovedBy   *uuid.UUID
+	ApprovedAt   *time.Time
+	ApprovalNote string
+
+	// Who voided the document, when, and the reason they gave. A void keeps
+	// every printed field exactly as it was; these three are the only new
+	// facts, and the immutable trigger lets them in.
+	VoidedBy   *uuid.UUID
+	VoidedAt   *time.Time
+	VoidReason string
 }
 
 const documentColumns = `id, tenant_id, doc_type, doc_no, doc_year, doc_date, status,
 	customer_id, vehicle_id, customer_name, customer_nic, customer_address, customer_phone,
 	vehicle_make, vehicle_model, vehicle_type, vehicle_colour, vehicle_engine_no,
 	vehicle_chassis_no, vehicle_yom, finance_company, finance_address,
-	price_cents, down_cents, balance_cents, notes, quote_id, created_by, created_at, updated_at`
+	price_cents, down_cents, balance_cents, notes, quote_id, created_by, created_at, updated_at,
+	approved_by, approved_at, approval_note, voided_by, voided_at, void_reason`
 
-// DocumentParams is what the counter captures to issue a document.
+// DocumentParams is what the counter captures to issue a document. ApprovedBy
+// is the manager who pinned a discount or a date past the tenant's limit; it
+// is nil for the ordinary case where nothing needs signing off.
 type DocumentParams struct {
 	DocType        string
 	DocDate        time.Time
@@ -70,6 +87,12 @@ type DocumentParams struct {
 	DownCents      int64
 	Notes          string
 	QuoteID        *uuid.UUID
+	ApprovedBy     *uuid.UUID
+	ApprovalNote   string
+	// Today is the business date the server thinks it is, in the business
+	// timezone. The backdate rule compares the document date against it, so
+	// the caller decides what "today" means rather than the store guessing.
+	Today time.Time
 }
 
 // DocumentResult carries what changed besides the document, so the handler can
@@ -118,6 +141,37 @@ func (s *Store) CreateDocument(ctx context.Context, tenantID, createdBy uuid.UUI
 		return DocumentResult{}, ErrInvalidDocument
 	}
 
+	// C8 and C9: a discount past the tenant's percent or a date older than
+	// the tenant's limit needs a manager's pin. The check reads the tenant's
+	// own settings, so the rule travels with the dealership rather than being
+	// hard coded here.
+	if p.ApprovedBy != nil {
+		canApprove, err := s.ApproverCan(ctx, tenantID, *p.ApprovedBy)
+		if err != nil {
+			return DocumentResult{}, err
+		}
+		if !canApprove {
+			return DocumentResult{}, ErrNeedsApproval
+		}
+	}
+	today := p.Today
+	if today.IsZero() {
+		today = truncateDate(time.Now())
+	}
+	reason, needed, err := s.ApprovalNeeded(ctx, tenantID, p.DocType, price, vehicle.ID, p.DocDate, today)
+	if err != nil {
+		return DocumentResult{}, err
+	}
+	_ = reason // the reason is surfaced by the web layer before the submit
+	if needed && p.ApprovedBy == nil {
+		return DocumentResult{}, ErrNeedsApproval
+	}
+	if p.ApprovedBy != nil {
+		if utf8.RuneCountInString(p.ApprovalNote) > 500 {
+			return DocumentResult{}, ErrInvalidDocument
+		}
+	}
+
 	var convertedQuote *uuid.UUID
 	if p.QuoteID != nil {
 		if p.DocType != DocSalesCash && p.DocType != DocSalesLease {
@@ -144,9 +198,10 @@ func (s *Store) CreateDocument(ctx context.Context, tenantID, createdBy uuid.UUI
 			customer_id, vehicle_id, customer_name, customer_nic, customer_address, customer_phone,
 			vehicle_make, vehicle_model, vehicle_type, vehicle_colour, vehicle_engine_no,
 			vehicle_chassis_no, vehicle_yom, finance_company, finance_address,
-			price_cents, down_cents, balance_cents, notes, quote_id, created_by)
+			price_cents, down_cents, balance_cents, notes, quote_id, created_by,
+			approved_by, approved_at, approval_note)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-			$17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
+			$17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
 		returning ` + documentColumns
 
 	doc, err := scanDocument(s.db.QueryRow(ctx, q,
@@ -154,7 +209,8 @@ func (s *Store) CreateDocument(ctx context.Context, tenantID, createdBy uuid.UUI
 		customer.ID, vehicle.ID, customer.Name, customer.NIC, customerAddress(customer), customer.Phone,
 		vehicle.Make, vehicle.Model, vehicle.Type, vehicle.Colour, vehicle.EngineNo,
 		vehicle.ChassisNo, vehicle.YOM, p.FinanceCompany, p.FinanceAddress,
-		price, down, balance, p.Notes, quoteID, createdBy))
+		price, down, balance, p.Notes, quoteID, createdBy,
+		p.ApprovedBy, approvalTime(p.ApprovedBy), p.ApprovalNote))
 	if err != nil {
 		return DocumentResult{}, fmt.Errorf("create document: %w", err)
 	}
@@ -327,7 +383,9 @@ func scanDocument(row rowScanner) (Document, error) {
 		&d.VehicleMake, &d.VehicleModel, &d.VehicleType, &d.VehicleColour, &d.VehicleEngineNo,
 		&d.VehicleChassisNo, &d.VehicleYOM, &d.FinanceCompany, &d.FinanceAddress,
 		&d.PriceCents, &d.DownCents, &d.BalanceCents, &d.Notes, &d.QuoteID, &d.CreatedBy,
-		&d.CreatedAt, &d.UpdatedAt)
+		&d.CreatedAt, &d.UpdatedAt,
+		&d.ApprovedBy, &d.ApprovedAt, &d.ApprovalNote,
+		&d.VoidedBy, &d.VoidedAt, &d.VoidReason)
 	if err != nil {
 		return Document{}, fmt.Errorf("scan document: %w", notFound(err))
 	}

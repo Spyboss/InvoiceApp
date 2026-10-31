@@ -32,6 +32,7 @@ const (
 	DocOpen      = "OPEN"
 	DocIssued    = "ISSUED"
 	DocConverted = "CONVERTED"
+	DocVoid      = "VOID"
 )
 
 // ValidDocType reports whether the type is one this app issues as a document.
