@@ -68,7 +68,7 @@ a unit that has already left the yard cannot leave twice, so re-sending a sold u
 - a chassis shorter than 5 characters
 - a number over 32 characters, a customer name over 120, a nic over 20, an address over 500, a model over 80, an engine or chassis or colour over 40, a finance company over 120
 - a date outside 2000–2100, or one this parser cannot read
-- a number the app already holds under a different customer, chassis, date or money — the file disagrees with the book, and a person decides which is wrong
+- a number the app already holds under a different customer, chassis, date or money, or one whose row now reads as a different kind of paper — the file disagrees with the book, and a person decides which is wrong
 
 `default_make` is part of the form, not the file: the invoices file carries a model and no make, and a vehicle row needs one. a stock sheet that names a make on every row does not need it.
 

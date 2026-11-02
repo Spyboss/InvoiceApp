@@ -106,7 +106,7 @@ func (s *Store) ImportInvoices(ctx context.Context, tenantID, actorID uuid.UUID,
 	held := make(map[int]*Document, len(in.File.Papers))
 	var problems []ImportProblem
 	for i, paper := range in.File.Papers {
-		doc, err := s.documentByNo(ctx, tenantID, paperDocType(paper), paper.Date.Year(), paper.No)
+		doc, err := s.importedDocument(ctx, tenantID, paper)
 		if err != nil {
 			return zero, err
 		}
@@ -459,19 +459,75 @@ func normaliseMake(own, fallback string) string {
 
 func tooLong(s string, max int) bool { return len([]rune(s)) > max }
 
-// documentByNo finds the paper the app already holds under the number the old
-// app gave it, or nil.
-func (s *Store) documentByNo(ctx context.Context, tenantID uuid.UUID, docType string, year int, no string) (*Document, error) {
+// legacyTypes are the document types one legacy kind can be filed under. The
+// old app numbered cash and leasing sales in one series, so a sale that owed
+// money when it was imported and owes nothing in today's export is the same
+// paper, not a second one with the same printed number.
+func legacyTypes(kind string) []string {
+	switch kind {
+	case legacy.KindSales:
+		return []string{DocSalesCash, DocSalesLease}
+	case legacy.KindProforma:
+		return []string{DocProforma}
+	case legacy.KindAdvance:
+		return []string{DocAdvance}
+	}
+	return nil
+}
+
+// importedDocument finds the paper a legacy row already is, by the number the
+// old app gave it and never by the type or the year this app files it under:
+// those two are read from the row, so a corrected balance or date in the export
+// has to come out as a disagreement rather than as a second paper printing a
+// number the first one already carries.
+func (s *Store) importedDocument(ctx context.Context, tenantID uuid.UUID, p legacy.Paper) (*Document, error) {
 	q := `select ` + documentColumns + ` from documents
-		where tenant_id = $1 and doc_type = $2 and doc_year = $3 and doc_no = $4`
-	doc, err := scanDocument(s.db.QueryRow(ctx, q, tenantID, docType, year, no))
-	if errors.Is(err, ErrNotFound) {
-		return nil, nil
-	}
+		where tenant_id = $1 and doc_type = any($2) and doc_no = $3
+		order by created_at
+		limit 2`
+
+	rows, err := s.db.Query(ctx, q, tenantID, legacyTypes(p.Kind), p.No)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("find imported paper: %w", err)
 	}
-	return &doc, nil
+	defer rows.Close()
+
+	var found []Document
+	for rows.Next() {
+		doc, err := scanDocument(rows)
+		if err != nil {
+			return nil, err
+		}
+		found = append(found, doc)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("find imported paper: %w", err)
+	}
+
+	switch len(found) {
+	case 0:
+		return nil, nil
+	case 1:
+		return &found[0], nil
+	}
+	return nil, &ImportRefusal{Problems: []ImportProblem{{Line: p.Line, Problem: fmt.Sprintf(
+		"%s %s is in the app twice, as %s and %s; one of them has to go before this file can be read",
+		p.Kind, p.No, seriesName(found[0].DocType), seriesName(found[1].DocType))}}}
+}
+
+// seriesName is what one document type is called in a sentence.
+func seriesName(docType string) string {
+	switch docType {
+	case DocSalesCash:
+		return "a cash invoice"
+	case DocSalesLease:
+		return "a leasing sale"
+	case DocProforma:
+		return "a proforma"
+	case DocAdvance:
+		return "an advance receipt"
+	}
+	return docType
 }
 
 // documentMismatch says how a paper the app already holds differs from the row
@@ -481,6 +537,15 @@ func (s *Store) documentByNo(ctx context.Context, tenantID uuid.UUID, docType st
 func documentMismatch(d Document, p legacy.Paper) string {
 	label := p.Kind + " " + p.No
 	switch {
+	// The kind comes first, because a row that now owes nothing is a different
+	// paper from the one on file, and the money difference below is only the
+	// symptom of that.
+	case d.DocType != paperDocType(p):
+		return fmt.Sprintf("%s is in the app as %s, but the file reads as %s",
+			label, seriesName(d.DocType), seriesName(paperDocType(p)))
+	case d.DocDate.Format("2006-01-02") != p.Date.Format("2006-01-02"):
+		return fmt.Sprintf("%s is in the app dated %s, but the file says %s",
+			label, d.DocDate.Format("2006-01-02"), p.Date.Format("2006-01-02"))
 	case d.PriceCents != p.PriceCents:
 		return fmt.Sprintf("%s is already in the app with a price of %s, but the file says %s",
 			label, money.Format(d.PriceCents), money.Format(p.PriceCents))

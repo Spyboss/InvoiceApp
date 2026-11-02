@@ -410,6 +410,68 @@ func TestImportInvoicesRefusesPapersTheBookCannotHold(t *testing.T) {
 	}
 }
 
+// TestImportInvoicesRefusesAPaperThatChangedItsShape: the old app's number is
+// what identifies a paper, so a row whose date or money was corrected in the
+// export is the same paper disagreeing with the book. It must never land as a
+// second paper printing a number the first one already carries.
+func TestImportInvoicesRefusesAPaperThatChangedItsShape(t *testing.T) {
+	st := freshStore(t)
+	alpha := newTenant(t, st, "Alpha Motors", "alpha.test")
+	owner := newUser(t, st, alpha.ID, "owner@alpha.test", "OWNER")
+
+	original := invoiceFile(t, map[string]string{"invoice_no": "0070", "date": "2026-10-30"})
+	if _, err := importInvoices(t, st, alpha.ID, owner.ID, store.InvoiceImport{
+		Filename: "invoices.csv", SHA256: testFileSHA, DefaultMake: "Piaggio", File: original,
+	}); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+
+	// The same number, moved to another year: the row is the same paper, and
+	// the row that says otherwise is refused and named.
+	movedYear := invoiceFile(t, map[string]string{"invoice_no": "0070", "date": "2025-12-30"})
+	_, err := importInvoices(t, st, alpha.ID, owner.ID, store.InvoiceImport{
+		Filename: "invoices.csv", SHA256: testFileSHA, DefaultMake: "Piaggio", File: movedYear,
+	})
+	if !errors.Is(err, store.ErrImportRefused) {
+		t.Fatalf("import of a paper with a moved date = %v, want a refusal", err)
+	}
+	var refusal *store.ImportRefusal
+	if !errors.As(err, &refusal) {
+		t.Fatalf("refusal is %T", err)
+	}
+	if got := problemText(refusal, 0); !strings.Contains(got, "2025-12-30") || !strings.Contains(got, "2026-10-30") {
+		t.Fatalf("the refusal does not name both dates: %q", got)
+	}
+
+	// And the same number with money still owing, which is a different paper.
+	turnedLeasing := invoiceFile(t, map[string]string{
+		"invoice_no": "0070", "date": "2026-10-30", "down": "250000.0", "balance": "1000000.0",
+	})
+	_, err = importInvoices(t, st, alpha.ID, owner.ID, store.InvoiceImport{
+		Filename: "invoices.csv", SHA256: testFileSHA, DefaultMake: "Piaggio", File: turnedLeasing,
+	})
+	if !errors.Is(err, store.ErrImportRefused) {
+		t.Fatalf("import of a paper that turned into a leasing sale = %v, want a refusal", err)
+	}
+	if !errors.As(err, &refusal) {
+		t.Fatalf("refusal is %T", err)
+	}
+	if got := problemText(refusal, 0); !strings.Contains(got, "leasing sale") {
+		t.Fatalf("the refusal does not say what the paper now reads as: %q", got)
+	}
+
+	// One paper, still a cash invoice: nothing was written twice.
+	docs := documentsByNo(t, st, alpha.ID)
+	if len(docs) != 1 {
+		t.Fatalf("%d documents after two refused imports, want 1: %v", len(docs), keysOf(docs))
+	}
+	for _, d := range docs {
+		if d.DocType != store.DocSalesCash {
+			t.Fatalf("%s is now a %s", d.DocNo, d.DocType)
+		}
+	}
+}
+
 // TestImportInvoicesRefusesSellingOneUnitTwice: a second sale of a chassis is
 // how a book starts lying about the yard.
 func TestImportInvoicesRefusesSellingOneUnitTwice(t *testing.T) {
