@@ -18,6 +18,9 @@ const (
 	AlertNumberingGap = "NUMBERING_GAP"
 	AlertOverride     = "OVERRIDE"
 	AlertAfterHours   = "AFTER_HOURS"
+	// AlertReconciliation is a file and the book disagreeing about the same
+	// days, which is the only way an import can drift afterwards.
+	AlertReconciliation = "RECONCILIATION"
 )
 
 // Alert severities. The sender decides what to do with each: an info alert is
@@ -66,7 +69,7 @@ type AlertParams struct {
 // ValidAlertKind reports whether a kind is one this app sends.
 func ValidAlertKind(kind string) bool {
 	switch kind {
-	case AlertVoid, AlertVariance, AlertNumberingGap, AlertOverride, AlertAfterHours:
+	case AlertVoid, AlertVariance, AlertNumberingGap, AlertOverride, AlertAfterHours, AlertReconciliation:
 		return true
 	}
 	return false

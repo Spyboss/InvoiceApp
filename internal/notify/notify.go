@@ -114,11 +114,12 @@ func (s *Sender) deliverOne(ctx context.Context, tenantID uuid.UUID, settings st
 // "NUMBERING_GAP" as a sentence.
 func (s *Sender) render(a store.Alert, company string) (subject, body string) {
 	kind := map[string]string{
-		store.AlertVoid:         "A document was voided",
-		store.AlertVariance:     "The drawer is past its limit",
-		store.AlertNumberingGap: "A document number is missing",
-		store.AlertOverride:     "A limit was overridden",
-		store.AlertAfterHours:   "Something happened after hours",
+		store.AlertVoid:           "A document was voided",
+		store.AlertVariance:       "The drawer is past its limit",
+		store.AlertNumberingGap:   "A document number is missing",
+		store.AlertOverride:       "A limit was overridden",
+		store.AlertAfterHours:     "Something happened after hours",
+		store.AlertReconciliation: "The file and the book do not agree",
 	}[a.Kind]
 	if kind == "" {
 		kind = "An alert fired"

@@ -26,6 +26,9 @@ var (
 	ErrInvalidUser          = errors.New("the user details are not valid")
 	ErrLastOwner            = errors.New("a dealership needs one active owner")
 	ErrInvalidAlert         = errors.New("the alert is not valid")
+	// ErrImportRefused is matched by errors.Is when a file cannot be imported
+	// as it stands; the *ImportRefusal carries the sentences and their lines.
+	ErrImportRefused = errors.New("the file cannot be imported")
 )
 
 // constraintName returns the unique index that rejected the write, if any.

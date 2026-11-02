@@ -3,6 +3,8 @@ package store
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -24,64 +26,37 @@ type NumberingGap struct {
 	Missing      int64
 }
 
-// ScanNumberingGaps compares each series' counter with the papers that series
-// actually issued, for the year given. It is read only, so it can run inside
-// or outside a transaction; CloseDay calls it once a day, which is the cadence
-// C2 asks for. Must run inside InTenant.
+// ScanNumberingGaps compares each series' counter with the numbers that were
+// really spent, for the year given. It is read only, so it can run inside or
+// outside a transaction; CloseDay calls it once a day, which is the cadence C2
+// asks for. Must run inside InTenant.
 func (s *Store) ScanNumberingGaps(ctx context.Context, tenantID uuid.UUID, year int) ([]NumberingGap, error) {
 	if year < 2000 || year > 2100 {
 		return nil, ErrInvalidDocument
 	}
 
-	// Each series takes its numbers from a different table: documents carry
-	// the document types, payments carry the receipts, day_ends carry the z
-	// reports. Counting them together is what makes the comparison honest —
-	// counting only documents would report a false gap for every receipt and
-	// every z ever closed. The rows are drained before anything else queries
-	// the connection, because pgx will not interleave two result sets.
 	const q = `
-		select ds.doc_type, ds.year, ds.last_value,
-			coalesce(issued.n, 0)
-		from document_series ds
-		left join (
-			select doc_type as series, doc_year as year, count(*) as n
-			from documents
-			where tenant_id = $1 and doc_year = $2
-			group by doc_type, doc_year
-			union all
-			select 'PAYMENT' as series, receipt_year as year, count(*) as n
-			from payments
-			where tenant_id = $1 and receipt_year = $2
-			group by receipt_year
-			union all
-			select 'DAY_END' as series, z_year as year, count(*) as n
-			from day_ends
-			where tenant_id = $1 and z_year = $2
-			group by z_year
-		) issued on issued.series = ds.doc_type and issued.year = ds.year
-		where ds.tenant_id = $1 and ds.year = $2 and ds.last_value > 0
-		order by ds.doc_type`
+		select doc_type, last_value
+		from document_series
+		where tenant_id = $1 and year = $2 and last_value > 0
+		order by doc_type`
 
 	rows, err := s.db.Query(ctx, q, tenantID, year)
 	if err != nil {
 		return nil, fmt.Errorf("scan numbering gaps: %w", err)
 	}
-	type candidate struct {
-		series  string
-		year    int
-		last    int64
-		issuedN int64
+	type counter struct {
+		series string
+		last   int64
 	}
-	var behind []candidate
+	var counters []counter
 	for rows.Next() {
-		var c candidate
-		if err := rows.Scan(&c.series, &c.year, &c.last, &c.issuedN); err != nil {
+		var c counter
+		if err := rows.Scan(&c.series, &c.last); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("scan numbering gaps: %w", err)
 		}
-		if c.issuedN < c.last {
-			behind = append(behind, c)
-		}
+		counters = append(counters, c)
 	}
 	if err := rows.Err(); err != nil {
 		rows.Close()
@@ -89,91 +64,100 @@ func (s *Store) ScanNumberingGaps(ctx context.Context, tenantID uuid.UUID, year 
 	}
 	rows.Close()
 
-	// The counter is ahead of the papers. Rather than list every missing
-	// number, find the first one nobody holds and report the run, which is
-	// what a person needs to go and look for.
+	// The numbers are read as a set and walked, rather than counted: a count
+	// answers "how many", but the owner needs "which one", and the two sales
+	// series share one space on paper (see heldNumbers), so a count of one
+	// series alone would report a false gap for every paper the other holds.
 	var gaps []NumberingGap
-	for _, c := range behind {
-		first, err := s.firstMissingNo(ctx, tenantID, c.series, c.year, c.last)
+	for _, c := range counters {
+		held, err := s.heldNumbers(ctx, tenantID, c.series, year)
 		if err != nil {
 			return nil, err
 		}
+
+		var (
+			issued       int64
+			firstMissing int64
+		)
+		for n := int64(1); n <= c.last; n++ {
+			if held[n] {
+				issued++
+				continue
+			}
+			if firstMissing == 0 {
+				firstMissing = n
+			}
+		}
+		if firstMissing == 0 {
+			continue
+		}
 		gaps = append(gaps, NumberingGap{
 			Series:       c.series,
-			Year:         c.year,
+			Year:         year,
 			Expected:     c.last,
-			Issued:       c.issuedN,
-			FirstMissing: first,
-			Missing:      c.last - c.issuedN,
+			Issued:       issued,
+			FirstMissing: firstMissing,
+			Missing:      c.last - issued,
 		})
 	}
 	return gaps, nil
 }
 
-// firstMissingNo walks the numbers a series has spent and returns the first
-// one no paper carries. It reads the issued numbers as a set and steps through
-// 1..last, so it finds the head of a run of gaps rather than only that some
-// exist. A series spends numbers 1..last with none missing, so the walk ends
-// at last+1 and the caller never sees it. Which table holds the numbers
-// depends on the series, the same split the scan counts from.
-func (s *Store) firstMissingNo(ctx context.Context, tenantID uuid.UUID, series string, year int, last int64) (int64, error) {
-	const docQ = `
-		select doc_no
-		from documents
-		where tenant_id = $1 and doc_type = $2 and doc_year = $3`
-	const payQ = `
-		select receipt_no
-		from payments
-		where tenant_id = $1 and receipt_year = $2`
-	const zQ = `
-		select z_no
-		from day_ends
-		where tenant_id = $1 and z_year = $2`
-
+// heldNumbers reads the numbers one series has spent, as a set. Which table
+// holds them depends on the series: documents carry the document types,
+// payments carry the receipts, day_ends carry the z reports.
+//
+// The two sales series are read together on purpose. The old app numbered cash
+// and leasing sales from one SALES counter, and importing a year of paper brings
+// those numbers in unchanged, so on paper both series spent from one space. A
+// number held by either is a number somebody really has in hand, and reporting
+// it as missing from the other series would be a false alarm on every sale.
+func (s *Store) heldNumbers(ctx context.Context, tenantID uuid.UUID, series string, year int) (map[int64]bool, error) {
 	var (
 		q    string
 		args []any
 	)
 	switch series {
 	case SeriesPayment:
-		q, args = payQ, []any{tenantID, year}
+		q = `select receipt_no from payments where tenant_id = $1 and receipt_year = $2`
+		args = []any{tenantID, year}
 	case SeriesDayEnd:
-		q, args = zQ, []any{tenantID, year}
+		q = `select z_no from day_ends where tenant_id = $1 and z_year = $2`
+		args = []any{tenantID, year}
+	case DocSalesCash, DocSalesLease:
+		q = `select doc_no from documents
+			where tenant_id = $1 and doc_year = $2 and doc_type in ('SALES_CASH', 'SALES_LEASING')`
+		args = []any{tenantID, year}
 	default:
-		q, args = docQ, []any{tenantID, series, year}
+		q = `select doc_no from documents where tenant_id = $1 and doc_year = $2 and doc_type = $3`
+		args = []any{tenantID, year, series}
 	}
 
 	rows, err := s.db.Query(ctx, q, args...)
 	if err != nil {
-		return 0, fmt.Errorf("read issued numbers: %w", err)
+		return nil, fmt.Errorf("read issued numbers: %w", err)
 	}
 	defer rows.Close()
 
-	held := make(map[int64]bool, last)
+	held := make(map[int64]bool)
 	for rows.Next() {
 		var no string
 		if err := rows.Scan(&no); err != nil {
-			return 0, fmt.Errorf("read issued numbers: %w", err)
+			return nil, fmt.Errorf("read issued numbers: %w", err)
 		}
-		var n int64
-		if _, err := fmt.Sscanf(no, "%d", &n); err != nil {
-			// A number that does not parse is itself worth knowing about,
-			// but it cannot be compared, so it is skipped rather than
-			// failing the whole scan.
+		n, err := strconv.ParseInt(strings.TrimSpace(no), 10, 64)
+		if err != nil || n <= 0 {
+			// A number that is not a number is worth knowing about, but it
+			// cannot be compared, so it is skipped rather than failing the
+			// whole scan. The import leaves such a number on the paper too.
 			continue
 		}
 		held[n] = true
 	}
 	if err := rows.Err(); err != nil {
-		return 0, fmt.Errorf("read issued numbers: %w", err)
+		return nil, fmt.Errorf("read issued numbers: %w", err)
 	}
-
-	for n := int64(1); n <= last; n++ {
-		if !held[n] {
-			return n, nil
-		}
-	}
-	return last + 1, nil
+	return held, nil
 }
 
 // RecordNumberingGapAlerts turns each gap into an alert, in the caller's
