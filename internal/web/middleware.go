@@ -109,7 +109,7 @@ func (s *Server) csrfHandler(next http.Handler) http.Handler {
 		}
 
 		if !safeMethod(r.Method) {
-			if err := r.ParseForm(); err != nil {
+			if err := parsePostBody(w, r); err != nil {
 				s.renderError(w, r, http.StatusBadRequest, "Bad request", "The form could not be read.")
 				return
 			}
@@ -122,6 +122,23 @@ func (s *Server) csrfHandler(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), csrfKey{}, token)))
 	})
+}
+
+// maxUploadBytes bounds every post body, so a file upload cannot fill the disk
+// of the machine that runs the books. The old app's whole invoices file is a
+// few hundred kilobytes; ten megabytes is a file somebody opened in a
+// spreadsheet and saved, not a file we should be reading anyway.
+const maxUploadBytes = 10 << 20
+
+// parsePostBody reads the fields of a post whatever it is encoded as. ParseForm
+// alone stops at a multipart body, so an upload's csrf token would be invisible
+// to csrfHandler and every upload would be refused as an expired form.
+func parsePostBody(w http.ResponseWriter, r *http.Request) error {
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+		r.Body = http.MaxBytesReader(w, r.Body, maxUploadBytes)
+		return r.ParseMultipartForm(4 << 20)
+	}
+	return r.ParseForm()
 }
 
 func safeMethod(method string) bool {

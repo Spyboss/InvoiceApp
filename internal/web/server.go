@@ -137,6 +137,14 @@ func New(d Deps) http.Handler {
 	mux.Handle("GET /reports/stock", s.requirePermission("report.view", s.stockReportPage()))
 	mux.Handle("GET /reports/stock.csv", s.requirePermission("report.view", s.stockReportCSV()))
 
+	mux.Handle("GET /reconciliation", s.requirePermission("reconcile.run", s.reconciliationPage()))
+	mux.Handle("POST /reconciliation", s.requirePermission("reconcile.run", s.reconcileSubmit()))
+
+	mux.Handle("GET /import", s.requirePermission("import.run", s.importPage()))
+	mux.Handle("GET /import/template", s.requirePermission("import.run", s.importTemplate()))
+	mux.Handle("POST /import/invoices", s.requirePermission("import.run", s.importInvoicesSubmit()))
+	mux.Handle("POST /import/stock", s.requirePermission("import.run", s.importStockSubmit()))
+
 	mux.Handle("/", s.notFound())
 
 	return httpx.Chain(mux,

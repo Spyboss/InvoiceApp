@@ -1,0 +1,196 @@
+package views
+
+import "time"
+
+// ImportProblem is one row the file could not be taken in because of: the line
+// it sits on, zero when the problem is about the file itself, and a sentence
+// somebody can act on.
+type ImportProblem struct {
+	Line   int
+	Detail string
+}
+
+// ImportFields is what the person typed, kept so a refusal does not make them
+// type it again.
+type ImportFields struct {
+	DefaultMake string
+	StockDate   string
+}
+
+// ImportRunView is one recorded run with both sides of its arithmetic, read
+// back from the row the database wrote.
+type ImportRunView struct {
+	Kind      string
+	KindLabel string
+	Filename  string
+	SHA       string
+	Who       string
+	At        time.Time
+	Imported  int
+	Skipped   int
+	FileSays  string
+	AppHolds  string
+	Balanced  bool
+}
+
+// ImportRunRow is one line of the history.
+type ImportRunRow struct {
+	ID        string
+	KindLabel string
+	Filename  string
+	SHA       string
+	Imported  int
+	Skipped   int
+	Who       string
+	At        time.Time
+}
+
+type ImportData struct {
+	TenantName string
+	UserName   string
+	Nav        []NavLink
+	CSRFToken  string
+	Fields     ImportFields
+	Problems   []ImportProblem
+	// Attempted says a file was uploaded, so an empty problem list means the
+	// import worked rather than that nobody has tried yet.
+	Attempted bool
+	Notice    string
+	Run       *ImportRunView
+	Runs      []ImportRunRow
+}
+
+templ Import(d ImportData) {
+	@Layout("Import", d.TenantName, d.UserName, d.Nav, importBody(d))
+}
+
+templ importBody(d ImportData) {
+	<article class="wide">
+		<header>
+			<h1>Import</h1>
+			<p class="muted">Bring the old app's invoices and the yard sheet into this book. A file goes in whole or not at all, and uploading the same file again changes nothing.</p>
+		</header>
+
+		if len(d.Problems) > 0 {
+			<section role="alert">
+				<h2>The file was not imported</h2>
+				<ul>
+					for _, p := range d.Problems {
+						<li>
+							if p.Line > 0 {
+								<strong>Line { p.Line }:</strong>
+							}
+							{ p.Detail }
+						</li>
+					}
+				</ul>
+				<p class="muted">Nothing was written. Correct the rows above and upload the file again.</p>
+			</section>
+		} else if d.Notice != "" {
+			<p role="status">{ d.Notice }</p>
+		}
+
+		if d.Run != nil {
+			<h2>What the run recorded</h2>
+			<dl class="facts">
+				<dt>File</dt>
+				<dd>{ d.Run.Filename } <small class="muted">sha256 { d.Run.SHA }</small></dd>
+				<dt>Run by</dt>
+				<dd>{ d.Run.Who } on { d.Run.At.UTC().Format("2006-01-02 15:04") } UTC</dd>
+				<dt>Rows</dt>
+				<dd>{ d.Run.Imported } written, { d.Run.Skipped } already in the book</dd>
+				<dt>The file says</dt>
+				<dd>{ d.Run.FileSays }</dd>
+				<dt>The app holds</dt>
+				<dd>{ d.Run.AppHolds }</dd>
+			</dl>
+			if d.Run.Balanced {
+				<p role="status">The file and the app agree on every row.</p>
+			} else {
+				<p role="alert">The file and the app disagree. This run should not have been written at all; tell whoever maintains the app.</p>
+			}
+		}
+
+		<section>
+			<h2>Invoices</h2>
+			<p class="muted">The invoices file the old app wrote: sales, proformas and advance receipts, each with its own number and date. Cash and leasing sales are told apart by what is still owed.</p>
+			<form method="post" action="/import/invoices" enctype="multipart/form-data">
+				<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
+
+				<label>
+					invoices.csv
+					<input type="file" name="file" accept=".csv,text/csv" required/>
+				</label>
+
+				<label>
+					Make of these units
+					<input type="text" name="default_make" value={ d.Fields.DefaultMake } maxlength="80" required/>
+					<small class="muted">The file carries a model and no make, so the units are imported under this make.</small>
+				</label>
+
+				<button type="submit">Import the invoices</button>
+			</form>
+		</section>
+
+		<section>
+			<h2>Yard sheet</h2>
+			<p class="muted">The units standing in the yard, one row each. A unit that is already in the app is left alone and its money checked. <a href="/import/template">Download the sheet's columns</a>.</p>
+			<form method="post" action="/import/stock" enctype="multipart/form-data">
+				<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
+
+				<label>
+					stock.csv
+					<input type="file" name="file" accept=".csv,text/csv" required/>
+				</label>
+
+				<label>
+					Make, for units the sheet leaves blank
+					<input type="text" name="default_make" value={ d.Fields.DefaultMake } maxlength="80"/>
+				</label>
+
+				<label>
+					Date undated units arrived
+					<input type="date" name="received_on" value={ d.Fields.StockDate }/>
+					<small class="muted">Ageing counts from this day for a unit whose own received date is blank.</small>
+				</label>
+
+				<button type="submit">Import the yard sheet</button>
+			</form>
+		</section>
+
+		<h2>Runs</h2>
+		if len(d.Runs) == 0 {
+			<p class="muted">No file has been imported yet.</p>
+		} else {
+			<div class="table-scroll">
+				<table>
+					<thead>
+						<tr>
+							<th scope="col">When (UTC)</th>
+							<th scope="col">What</th>
+							<th scope="col">File</th>
+							<th scope="col">Written</th>
+							<th scope="col">Already there</th>
+							<th scope="col">By</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, run := range d.Runs {
+							<tr>
+								<td>{ run.At.UTC().Format("2006-01-02 15:04") }</td>
+								<td>{ run.KindLabel }</td>
+								<td>
+									{ run.Filename }
+									<small class="muted">sha256 { run.SHA }</small>
+								</td>
+								<td>{ run.Imported }</td>
+								<td>{ run.Skipped }</td>
+								<td>{ run.Who }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	</article>
+}

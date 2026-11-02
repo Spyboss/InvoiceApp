@@ -1,0 +1,216 @@
+package views
+
+import "time"
+
+// ReconcileLineRow is one day of one document type: what the file says, what
+// the book holds, and the difference between them when there is one.
+type ReconcileLineRow struct {
+	Day        string
+	Type       string
+	FilePapers int
+	BookPapers int
+	FileGross  string
+	BookGross  string
+	FileDown   string
+	BookDown   string
+	Matched    bool
+	Difference string
+}
+
+// ReconcileRunView is one recorded comparison with every line it looked at.
+type ReconcileRunView struct {
+	Range      string
+	Filename   string
+	SHA        string
+	Who        string
+	At         time.Time
+	Matched    bool
+	Difference string
+	Lines      []ReconcileLineRow
+}
+
+// ReconcileRunRow is one line of the history.
+type ReconcileRunRow struct {
+	ID         string
+	Range      string
+	Filename   string
+	Matched    bool
+	Difference string
+	Who        string
+	At         time.Time
+}
+
+type ReconciliationData struct {
+	TenantName string
+	UserName   string
+	Nav        []NavLink
+	CSRFToken  string
+	DateFrom   string
+	DateTo     string
+	Problems   []ImportProblem
+	// Attempted says a file was uploaded, so an empty problem list means the
+	// comparison ran rather than that nobody has tried yet.
+	Attempted bool
+	Run       *ReconcileRunView
+	Runs      []ReconcileRunRow
+}
+
+templ Reconciliation(d ReconciliationData) {
+	@Layout("Reconciliation", d.TenantName, d.UserName, d.Nav, reconciliationBody(d))
+}
+
+templ reconciliationBody(d ReconciliationData) {
+	<article class="wide">
+		<header>
+			<h1>Reconciliation</h1>
+			<p class="muted">Check a file the old app wrote against this book over a range of days. Only papers that came in from a file are compared, so an invoice this app issued itself is never counted as a difference.</p>
+		</header>
+
+		if len(d.Problems) > 0 {
+			<section role="alert">
+				<h2>Nothing was compared</h2>
+				<ul>
+					for _, p := range d.Problems {
+						<li>
+							if p.Line > 0 {
+								<strong>Line { p.Line }:</strong>
+							}
+							{ p.Detail }
+						</li>
+					}
+				</ul>
+				<p class="muted">No run was recorded. Correct the file or the days above and check again.</p>
+			</section>
+		}
+
+		<form method="post" action="/reconciliation" enctype="multipart/form-data">
+			<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
+
+			<label>
+				invoices.csv
+				<input type="file" name="file" accept=".csv,text/csv" required/>
+			</label>
+
+			<label>
+				First day
+				<input type="date" name="date_from" value={ d.DateFrom } required/>
+			</label>
+
+			<label>
+				Last day
+				<input type="date" name="date_to" value={ d.DateTo } required/>
+			</label>
+
+			<button type="submit">Check the file against the book</button>
+		</form>
+
+		if d.Run != nil {
+			<h2>This run</h2>
+			<dl class="facts">
+				<dt>Days</dt>
+				<dd>{ d.Run.Range }</dd>
+				<dt>File</dt>
+				<dd>{ d.Run.Filename } <small class="muted">sha256 { d.Run.SHA }</small></dd>
+				<dt>Run by</dt>
+				<dd>{ d.Run.Who } on { d.Run.At.UTC().Format("2006-01-02 15:04") } UTC</dd>
+				<dt>Result</dt>
+				<dd>
+					if d.Run.Matched {
+						<strong>The book agrees with the file on every day.</strong>
+					} else {
+						<strong role="alert">The book differs from the file.</strong>
+						{ d.Run.Difference }
+					}
+				</dd>
+			</dl>
+
+			if !d.Run.Matched {
+				<p>The first difference points at the day to open; the alert this run raised carries the same sentence.</p>
+				<ul>
+					for _, line := range d.Run.Lines {
+						if !line.Matched {
+							<li>
+								<strong>{ line.Day }</strong>, { line.Type }: { line.Difference }
+							</li>
+						}
+					}
+				</ul>
+			}
+
+			<div class="table-scroll">
+				<table>
+					<thead>
+						<tr>
+							<th scope="col">Day</th>
+							<th scope="col">Paper</th>
+							<th scope="col">File: papers</th>
+							<th scope="col">File: price (Rs)</th>
+							<th scope="col">File: down (Rs)</th>
+							<th scope="col">Book: papers</th>
+							<th scope="col">Book: price (Rs)</th>
+							<th scope="col">Book: down (Rs)</th>
+							<th scope="col">Result</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, line := range d.Run.Lines {
+							<tr>
+								<td>{ line.Day }</td>
+								<td>{ line.Type }</td>
+								<td>{ line.FilePapers }</td>
+								<td>{ line.FileGross }</td>
+								<td>{ line.FileDown }</td>
+								<td>{ line.BookPapers }</td>
+								<td>{ line.BookGross }</td>
+								<td>{ line.BookDown }</td>
+								<td>
+									if line.Matched {
+										<span class="status">agrees</span>
+									} else {
+										<span class="status">differs</span>
+									}
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+
+		<h2>Runs</h2>
+		if len(d.Runs) == 0 {
+			<p class="muted">No file has been checked against the book yet.</p>
+		} else {
+			<div class="table-scroll">
+				<table>
+					<thead>
+						<tr>
+							<th scope="col">When (UTC)</th>
+							<th scope="col">Days</th>
+							<th scope="col">File</th>
+							<th scope="col">Result</th>
+							<th scope="col">By</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, run := range d.Runs {
+							<tr>
+								<td>{ run.At.UTC().Format("2006-01-02 15:04") }</td>
+								<td><a href={ "/reconciliation?run=" + run.ID }>{ run.Range }</a></td>
+								<td>{ run.Filename }</td>
+								<td>
+									if run.Matched {
+										<span class="status">agrees</span>
+									} else {
+										<span class="status">differs</span>
+									}
+								</td>
+								<td>{ run.Who }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	</article>
+}

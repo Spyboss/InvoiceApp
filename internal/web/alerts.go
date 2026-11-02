@@ -97,6 +97,8 @@ func alertKindLabel(kind string) string {
 		return "Override"
 	case store.AlertAfterHours:
 		return "After hours"
+	case store.AlertReconciliation:
+		return "Reconciliation"
 	}
 	return kind
 }
