@@ -34,6 +34,7 @@ type DocumentsData struct {
 	TenantName string
 	UserName   string
 	Nav        []NavLink
+	CSRFToken  string
 	Query      string
 	Type       string
 	CanCreate  bool
@@ -43,7 +44,7 @@ type DocumentsData struct {
 }
 
 templ Documents(d DocumentsData) {
-	@Layout("Documents", d.TenantName, d.UserName, d.Nav, documentsBody(d))
+	@Layout("Documents", d.TenantName, d.UserName, d.CSRFToken, d.Nav, documentsBody(d))
 }
 
 templ documentsBody(d DocumentsData) {
@@ -56,7 +57,7 @@ templ documentsBody(d DocumentsData) {
 						<option value={ t.Value } selected?={ t.Selected }>{ t.Label }</option>
 					}
 				</select>
-				<input type="search" name="q" value={ d.Query } placeholder="Number, customer or chassis" aria-label="Search documents"/>
+				<input type="search" name="q" value={ d.Query } placeholder="Search documents" aria-label="Search documents"/>
 				<button type="submit" class="secondary">Filter</button>
 			</form>
 		</header>
@@ -64,12 +65,13 @@ templ documentsBody(d DocumentsData) {
 		if d.CanCreate {
 			<p><a role="button" href="/documents/new">New document</a></p>
 		}
-		if !d.ReadAll {
-			<p class="muted">You see the documents you issued. The owner, manager and accounts see every document.</p>
-		}
 
 		if len(d.Rows) == 0 {
-			<p class="muted">No documents match.</p>
+			if d.Query == "" && d.Type == "" {
+				<p class="muted">No documents yet.</p>
+			} else {
+				<p class="muted">No document matches that filter.</p>
+			}
 		} else {
 			<div class="table-scroll">
 				<table>
@@ -157,15 +159,12 @@ type ApprovalPin struct {
 }
 
 templ DocumentForm(d DocumentFormData) {
-	@Layout(d.Heading, d.TenantName, d.UserName, d.Nav, documentFormBody(d))
+	@Layout(d.Heading, d.TenantName, d.UserName, d.CSRFToken, d.Nav, documentFormBody(d))
 }
 
 templ documentFormBody(d DocumentFormData) {
 	<article class="wide">
-		<header>
-			<h1>{ d.Heading }</h1>
-			<p class="muted">Once issued, a document cannot be edited. Check the customer, the unit and the amounts before you submit.</p>
-		</header>
+		<h1>{ d.Heading }</h1>
 
 		if d.Error != "" {
 			<p role="alert">{ d.Error }</p>
@@ -208,7 +207,6 @@ templ documentFormBody(d DocumentFormData) {
 							<option value={ c.ID } selected?={ c.ID == d.Fields.CustomerID }>{ c.Label }</option>
 						}
 					</select>
-					<small>Add the customer first if they are not in the list.</small>
 				</label>
 				<label>
 					Vehicle
@@ -218,27 +216,24 @@ templ documentFormBody(d DocumentFormData) {
 							<option value={ v.ID } selected?={ v.ID == d.Fields.VehicleID }>{ v.Label }</option>
 						}
 					</select>
-					<small>Only units that are available or reserved are listed.</small>
 				</label>
 			}
 
 			<div class="grid">
 				<label>
 					Selling price (Rs)
-					<input type="text" name="price" value={ d.Fields.Price } inputmode="decimal" placeholder="1,250,000.00" required/>
+					<input type="text" name="price" value={ d.Fields.Price } inputmode="decimal" required/>
 				</label>
 				<label>
 					Advance / down payment (Rs)
-					<input type="text" name="down" value={ d.Fields.Down } inputmode="decimal" placeholder="0.00"/>
-					<small>Cash sales are recorded as paid in full whatever is here. A leasing sale must leave a balance.</small>
+					<input type="text" name="down" value={ d.Fields.Down } inputmode="decimal"/>
 				</label>
 			</div>
 
 			<div class="grid">
 				<label>
 					Finance company
-					<input type="text" name="finance_company" value={ d.Fields.FinanceCompany } maxlength="120" placeholder="SINGER FINANCE"/>
-					<small>Needed for a leasing sale or a proforma.</small>
+					<input type="text" name="finance_company" value={ d.Fields.FinanceCompany } maxlength="120"/>
 				</label>
 				<label>
 					Finance company address
@@ -257,7 +252,6 @@ templ documentFormBody(d DocumentFormData) {
 			if d.ApprovalNeeded || d.CanApprove {
 				<fieldset>
 					<legend>Manager approval</legend>
-					<p class="muted">The manager types their own email and password. Both people end up on the document and in the audit log; the clerk cannot sign this off alone.</p>
 					<div class="grid">
 						<label>
 							Manager email
@@ -270,7 +264,7 @@ templ documentFormBody(d DocumentFormData) {
 					</div>
 					<label>
 						Why (optional)
-						<input type="text" name="approval_note" value={ d.Approval.Note } maxlength="500" placeholder="Agreed with the owner on the phone"/>
+						<input type="text" name="approval_note" value={ d.Approval.Note } maxlength="500"/>
 					</label>
 				</fieldset>
 			}
@@ -313,7 +307,6 @@ type DocumentDetailData struct {
 	Notes           string
 	CanCreate       bool
 	CanPrint        bool
-	IsQuote         bool
 	IsOpenQuote     bool
 	IsInvoice       bool
 	CanSeePayments  bool
@@ -330,7 +323,6 @@ type DocumentDetailData struct {
 	ApprovalAt    string
 	ApprovalNote  string
 	CanVoid       bool
-	Voided        bool
 	VoidName      string
 	VoidedAt      string
 	VoidReason    string
@@ -339,18 +331,17 @@ type DocumentDetailData struct {
 }
 
 templ DocumentDetail(d DocumentDetailData) {
-	@Layout(d.TypeLabel+" "+d.DocNo, d.TenantName, d.UserName, d.Nav, documentDetailBody(d))
+	@Layout(d.TypeLabel+" "+d.DocNo, d.TenantName, d.UserName, d.CSRFToken, d.Nav, documentDetailBody(d))
 }
 
 templ documentDetailBody(d DocumentDetailData) {
 	<article class="wide">
-		<header>
-			<h1>{ d.TypeLabel } { d.DocNo }</h1>
-			<p><span class="status">{ d.Status }</span></p>
-			if d.Created {
-				<p role="status">Document issued.</p>
-			}
-		</header>
+		<h1>{ d.TypeLabel } { d.DocNo }</h1>
+
+		<p><span class="status">{ d.Status }</span></p>
+		if d.Created {
+			<p role="status">Document issued.</p>
+		}
 
 		<dl class="facts">
 			<dt>Date</dt>
@@ -409,7 +400,7 @@ templ documentDetailBody(d DocumentDetailData) {
 				<dt>Approval note</dt>
 				<dd>{ d.ApprovalNote }</dd>
 			}
-			if d.Voided {
+			if d.VoidName != "" {
 				<dt>Voided by</dt>
 				<dd>{ d.VoidName } on { d.VoidedAt }</dd>
 				<dt>Void reason</dt>
@@ -435,7 +426,7 @@ templ documentDetailBody(d DocumentDetailData) {
 		if d.IsInvoice && d.CanSeePayments {
 			<h2>Receipts</h2>
 			if len(d.Receipts) == 0 {
-				<p class="muted">No money has been taken against this invoice since it was issued.</p>
+				<p class="muted">No receipts yet.</p>
 			} else {
 				<div class="table-scroll">
 					<table>
@@ -464,11 +455,8 @@ templ documentDetailBody(d DocumentDetailData) {
 			}
 		}
 
-		if d.Voided {
-			<p role="status">This document is void. It is kept on the record exactly as it was issued, and the unit has gone back to the yard.</p>
-		} else if d.CanVoid {
+		if d.CanVoid {
 			<h2>Void this document</h2>
-			<p class="muted">A void is not a delete. The paper and its number stay on the record with the reason and who gave it, and the unit returns to stock. This cannot be undone.</p>
 			if d.VoidError != "" {
 				<p role="alert">{ d.VoidError }</p>
 			}
@@ -498,11 +486,5 @@ templ documentDetailBody(d DocumentDetailData) {
 				}
 			</div>
 		</footer>
-
-		if d.IsQuote {
-			<p class="muted">A quotation is open until it is converted. To change the price, issue a new quotation.</p>
-		} else {
-			<p class="muted">Issued documents cannot be edited.</p>
-		}
 	</article>
 }

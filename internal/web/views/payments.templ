@@ -25,6 +25,7 @@ type PaymentsData struct {
 	TenantName string
 	UserName   string
 	Nav        []NavLink
+	CSRFToken  string
 	Query      string
 	Method     string
 	From       string
@@ -34,7 +35,7 @@ type PaymentsData struct {
 }
 
 templ Payments(d PaymentsData) {
-	@Layout("Payments", d.TenantName, d.UserName, d.Nav, paymentsBody(d))
+	@Layout("Payments", d.TenantName, d.UserName, d.CSRFToken, d.Nav, paymentsBody(d))
 }
 
 templ paymentsBody(d PaymentsData) {
@@ -49,17 +50,17 @@ templ paymentsBody(d PaymentsData) {
 				</select>
 				<input type="date" name="from" value={ d.From } aria-label="From date"/>
 				<input type="date" name="to" value={ d.To } aria-label="To date"/>
-				<input type="search" name="q" value={ d.Query } placeholder="Receipt, invoice or customer" aria-label="Search receipts"/>
+				<input type="search" name="q" value={ d.Query } placeholder="Search receipts" aria-label="Search receipts"/>
 				<button type="submit" class="secondary">Filter</button>
 			</form>
 		</header>
 
-		<p class="muted">
-			A receipt pays one invoice and is never edited. Money handed back is recorded as a reversal on the day it happens, so a day that is already counted stays as it was.
-		</p>
-
 		if len(d.Rows) == 0 {
-			<p class="muted">No receipts match. Take a payment from the invoice you want to settle.</p>
+			if d.Query == "" && d.From == "" && d.To == "" && d.Method == "" {
+				<p class="muted">No receipts yet.</p>
+			} else {
+				<p class="muted">No receipt matches that filter.</p>
+			}
 		} else {
 			<div class="table-scroll">
 				<table>
@@ -95,12 +96,6 @@ templ paymentsBody(d PaymentsData) {
 				</table>
 			</div>
 		}
-
-		<footer>
-			<div class="actions">
-				<a href="/documents" role="button" class="secondary">Go to an invoice</a>
-			</div>
-		</footer>
 	</article>
 }
 
@@ -142,19 +137,16 @@ type PaymentFormData struct {
 }
 
 templ PaymentForm(d PaymentFormData) {
-	@Layout("Payment against "+d.DocumentNo, d.TenantName, d.UserName, d.Nav, paymentFormBody(d))
+	@Layout("Payment against "+d.DocumentNo, d.TenantName, d.UserName, d.CSRFToken, d.Nav, paymentFormBody(d))
 }
 
 templ paymentFormBody(d PaymentFormData) {
 	<article class="narrow">
-		<header>
-			<h1>Receipt for { d.DocumentType } { d.DocumentNo }</h1>
-			<p class="muted">
-				Customer: <a href={ "/customers/" + d.CustomerID }>{ d.CustomerName }</a>
-			</p>
-		</header>
+		<h1>Receipt for { d.DocumentType } { d.DocumentNo }</h1>
 
 		<dl class="facts">
+			<dt>Customer</dt>
+			<dd><a href={ "/customers/" + d.CustomerID }>{ d.CustomerName }</a></dd>
 			<dt>Balance at issue</dt>
 			<dd>Rs { d.IssuedBalance }</dd>
 			<dt>Already paid</dt>
@@ -162,7 +154,7 @@ templ paymentFormBody(d PaymentFormData) {
 			<dt>Still owed</dt>
 			<dd><strong>Rs { d.Outstanding }</strong></dd>
 			<dt>Receipt date</dt>
-			<dd>{ d.Date } (today)</dd>
+			<dd>{ d.Date }</dd>
 		</dl>
 
 		if d.Error != "" {
@@ -190,7 +182,6 @@ templ paymentFormBody(d PaymentFormData) {
 					<label>
 						Amount handed over (Rs)
 						<input type="text" name="amount" value={ d.Amount } inputmode="decimal" required/>
-						<small>At most Rs { d.Outstanding }. A payment above the balance is refused.</small>
 					</label>
 					<label>
 						How it arrived
@@ -199,13 +190,12 @@ templ paymentFormBody(d PaymentFormData) {
 								<option value={ m.Value } selected?={ m.Selected }>{ m.Label }</option>
 							}
 						</select>
-						<small>Only cash counts towards the drawer at day end.</small>
 					</label>
 				</div>
 
 				<label>
 					Reference
-					<input type="text" name="reference" value={ d.Reference } maxlength="60" placeholder="Cheque no, bank slip, card last four"/>
+					<input type="text" name="reference" value={ d.Reference } maxlength="60"/>
 				</label>
 
 				<label>
@@ -252,26 +242,23 @@ type ReceiptDetailData struct {
 }
 
 templ ReceiptDetail(d ReceiptDetailData) {
-	@Layout("Receipt "+d.No, d.TenantName, d.UserName, d.Nav, receiptDetailBody(d))
+	@Layout("Receipt "+d.No, d.TenantName, d.UserName, d.CSRFToken, d.Nav, receiptDetailBody(d))
 }
 
 templ receiptDetailBody(d ReceiptDetailData) {
 	<article class="narrow">
-		<header>
-			<h1>Receipt { d.No }</h1>
-			<p>
-				<span class="status">{ d.Status }</span>
-			</p>
-			if d.Created {
-				<p role="status">Receipt recorded.</p>
-			}
-			if d.Reversed {
-				<p role="status">Receipt reversed. The money is recorded as handed back today.</p>
-			}
-			if d.Error != "" {
-				<p role="alert">{ d.Error }</p>
-			}
-		</header>
+		<h1>Receipt { d.No }</h1>
+
+		<p><span class="status">{ d.Status }</span></p>
+		if d.Created {
+			<p role="status">Receipt recorded.</p>
+		}
+		if d.Reversed {
+			<p role="status">Receipt reversed.</p>
+		}
+		if d.Error != "" {
+			<p role="alert">{ d.Error }</p>
+		}
 
 		<dl class="facts">
 			<dt>Date</dt>
@@ -311,17 +298,13 @@ templ receiptDetailBody(d ReceiptDetailData) {
 		if d.CanReverse {
 			<details>
 				<summary>Reverse this receipt</summary>
-				<p class="muted">
-					The receipt stays in the record. The money is recorded as leaving the drawer on { d.Today }, so the day it was taken keeps its figures.
-				</p>
 				<form method="post" action={ "/payments/" + d.ID + "/reverse" }>
 					<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
 					<label>
 						Why is the money being handed back?
 						<textarea name="reason" rows="2" maxlength="500" required></textarea>
-						<small>At least three characters. This is what the owner reads later.</small>
 					</label>
-					<button type="submit" class="secondary">Reverse receipt</button>
+					<button type="submit" class="secondary">Reverse on { d.Today }</button>
 				</form>
 			</details>
 		}

@@ -48,6 +48,7 @@ func (s *Server) vehiclesPage() http.HandlerFunc {
 			TenantName: t.Name,
 			UserName:   u.User.Name,
 			Nav:        navLinks(r.Context(), r.URL.Path),
+			CSRFToken:  csrfToken(r.Context()),
 			Query:      search,
 			Status:     status,
 			CanWrite:   auth.Can(r.Context(), "vehicle.write"),

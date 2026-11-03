@@ -17,6 +17,7 @@ type VehiclesData struct {
 	TenantName string
 	UserName   string
 	Nav        []NavLink
+	CSRFToken  string
 	Query      string
 	Status     string
 	CanWrite   bool
@@ -24,7 +25,7 @@ type VehiclesData struct {
 }
 
 templ Vehicles(d VehiclesData) {
-	@Layout("Vehicles", d.TenantName, d.UserName, d.Nav, vehiclesBody(d))
+	@Layout("Vehicles", d.TenantName, d.UserName, d.CSRFToken, d.Nav, vehiclesBody(d))
 }
 
 templ vehiclesBody(d VehiclesData) {
@@ -37,7 +38,7 @@ templ vehiclesBody(d VehiclesData) {
 					<option value="AVAILABLE" selected?={ d.Status == "AVAILABLE" }>Available</option>
 					<option value="RESERVED" selected?={ d.Status == "RESERVED" }>Reserved</option>
 				</select>
-				<input type="search" name="q" value={ d.Query } placeholder="Model, chassis, stock no" aria-label="Search vehicles"/>
+				<input type="search" name="q" value={ d.Query } placeholder="Search vehicles" aria-label="Search vehicles"/>
 				<button type="submit" class="secondary">Filter</button>
 			</form>
 		</header>
@@ -47,7 +48,11 @@ templ vehiclesBody(d VehiclesData) {
 		}
 
 		if len(d.Rows) == 0 {
-			<p class="muted">No vehicles match.</p>
+			if d.Query == "" && d.Status == "" {
+				<p class="muted">No vehicles yet.</p>
+			} else {
+				<p class="muted">No vehicle matches that filter.</p>
+			}
 		} else {
 			<div class="table-scroll">
 				<table>
@@ -113,15 +118,12 @@ type VehicleFormData struct {
 }
 
 templ VehicleForm(d VehicleFormData) {
-	@Layout(d.Heading, d.TenantName, d.UserName, d.Nav, vehicleFormBody(d))
+	@Layout(d.Heading, d.TenantName, d.UserName, d.CSRFToken, d.Nav, vehicleFormBody(d))
 }
 
 templ vehicleFormBody(d VehicleFormData) {
 	<article class="wide">
-		<header>
-			<h1>{ d.Heading }</h1>
-			<p class="muted">Cost and price are what the owner and manager use. Sales cannot see this screen.</p>
-		</header>
+		<h1>{ d.Heading }</h1>
 
 		if d.Error != "" {
 			<p role="alert">{ d.Error }</p>
@@ -156,7 +158,7 @@ templ vehicleFormBody(d VehicleFormData) {
 				</label>
 				<label>
 					Type
-					<input type="text" name="vehicle_type" value={ d.Fields.Type } maxlength="40" placeholder="Petrol, electric"/>
+					<input type="text" name="vehicle_type" value={ d.Fields.Type } maxlength="40"/>
 				</label>
 			</div>
 			<div class="grid">
@@ -182,14 +184,13 @@ templ vehicleFormBody(d VehicleFormData) {
 			<div class="grid">
 				<label>
 					Price (Rs)
-					<input type="text" name="price" value={ d.Fields.Price } inputmode="decimal" placeholder="0.00"/>
+					<input type="text" name="price" value={ d.Fields.Price } inputmode="decimal"/>
 				</label>
 				<label>
 					Cost (Rs)
-					<input type="text" name="cost" value={ d.Fields.Cost } inputmode="decimal" placeholder="0.00"/>
+					<input type="text" name="cost" value={ d.Fields.Cost } inputmode="decimal"/>
 				</label>
 			</div>
-			<small>Cost is what the dealership paid. Only owner and manager can see it.</small>
 			<label>
 				Notes
 				<textarea name="notes" rows="2" maxlength="2000">{ d.Fields.Notes }</textarea>
@@ -217,7 +218,7 @@ type VehicleDetailData struct {
 }
 
 templ VehicleDetail(d VehicleDetailData) {
-	@Layout(d.Fields.Make+" "+d.Fields.Model, d.TenantName, d.UserName, d.Nav, vehicleDetailBody(d))
+	@Layout(d.Fields.Make+" "+d.Fields.Model, d.TenantName, d.UserName, d.CSRFToken, d.Nav, vehicleDetailBody(d))
 }
 
 templ vehicleDetailBody(d VehicleDetailData) {
@@ -265,10 +266,10 @@ templ vehicleDetailBody(d VehicleDetailData) {
 					<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
 					<input type="hidden" name="status" value="RESERVED"/>
 					<label>
-						Reserve for a buyer
-						<input type="text" name="note" maxlength="200" placeholder="Buyer name, advance, and so on"/>
+						Note
+						<input type="text" name="note" maxlength="200"/>
 					</label>
-					<button type="submit">Reserve</button>
+					<button type="submit">Reserve for a buyer</button>
 				</form>
 			}
 			if d.Status == "RESERVED" {
@@ -276,10 +277,10 @@ templ vehicleDetailBody(d VehicleDetailData) {
 					<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
 					<input type="hidden" name="status" value="AVAILABLE"/>
 					<label>
-						Release the reservation
-						<input type="text" name="note" maxlength="200" placeholder="Why the buyer walked away"/>
+						Note
+						<input type="text" name="note" maxlength="200"/>
 					</label>
-					<button type="submit" class="secondary">Release</button>
+					<button type="submit" class="secondary">Release the reservation</button>
 				</form>
 			}
 		}

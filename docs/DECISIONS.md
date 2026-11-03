@@ -304,3 +304,39 @@ rules:
 **why** the old app's numbers are the only link between paper on a shelf and a row in a database, so the import must not invent one, must not renumber one, and must be safe to repeat. putting the acceptance test in a check constraint means it holds for a script, a retry or a future screen, not just for today's handler. comparing the file with only the imported papers is what makes the check meaningful: it asks "is the book we brought in still the book the old app has", not "does the whole dealership agree with one csv".
 
 **cost** a single bad row stops the whole file, so the owner corrects the export and uploads again; that is deliberate, and the page names every line at once so it takes one pass. reconciliation only covers imported papers, so a paper typed into this app during the parallel month is invisible to it and shows up as neither a match nor a difference; the parallel run therefore still needs a human eye on `/documents` for papers this app issued. and the shared legacy sales series means two papers in one year can print the same number until a printed series prefix or one shared sales series is decided (see the open question on D09/D21).
+
+## D24 — the interface: one frame, facts instead of prose
+
+**date** 2026-11-03 · **status** accepted
+
+**context** steps 2 to 7 grew fifteen screens one at a time, each written by whoever had the rule in their head that day. the result worked but read like documentation: a tagline under every heading explaining the screen to itself, a `<small>` under every input restating the constraint the server already enforces, empty states that advised instead of informing, and a footer on one page carrying a sign-out link the other fourteen did not. a clerk does not read a dealership's software; they look for the figure they came for. every sentence that is not a figure or a label is one more thing between them and it.
+
+**decision**
+
+- one frame for every screen: `Layout(title, tenant, user, csrf, nav, body)`. the dealership, the destinations this person is allowed to reach, who they are signed in as and the way out live in the header. no page repeats a sign-out form, a "back" link or its own navigation.
+- a heading carries no tagline. `h1` names the screen and stops. a page whose purpose is unclear gets its layout fixed, not a sentence added.
+- an input carries no helper `<small>`. a constraint belongs in the label, in the abbreviation everyone already uses: "Password (12 characters or more)", not a label plus a paragraph.
+- empty states are one line and give no advice: "No receipts yet." A filter that found nothing says so in different words from a book that is empty, and the page knows which it is because it holds the filter values. "No receipts yet." / "No receipt matches that filter."
+- rules are not explained in advance. a refusal that already exists server-side says what happened on the attempt; a paragraph above the form saying it will happen is noise that goes stale the moment a limit changes.
+- facts are a `<dl class="facts">`, or a table with column headings. if a value cannot be a term and a definition, it does not belong in a facts block; if a set of values cannot be a row, it belongs on another screen.
+- search fields say what they search, not what they match against: `placeholder="Search customers"` plus an `aria-label`, never "Name, phone or NIC".
+- an alert channel that is not configured reads as a fact, not a warning: `Delivery — this page only`.
+- two forms side by side on a wide screen and stacked on a narrow one: `.split`.
+- a table wider than the screen scrolls inside its own box with a thin scrollbar, and the page itself never scrolls sideways. money is never wrapped or abbreviated to make it fit; the cell gives up padding first, at `max-width: 45rem`.
+- the interface has no dead branches: a view field no template uses is deleted, not kept for a screen that may come. three went with this pass (`HomeData.CanSeeAudit`, `AlertRow.Kind`, the import page's `Attempted`/`Notice`), replaced by flags and rows that are actually drawn.
+
+**why** the screens are read at a counter, in a hurry, by someone whose job is not this software. simplicity here is not a style: a page that states one thing in one place cannot disagree with itself, cannot go stale, and cannot be skimmed wrong. the mixed version did all three: the payments page explained a reversal above the list, the receipt page explained it again, and the day-end page explained expected cash a third time, in three slightly different words.
+
+**cost** the rationale that used to sit on screen now lives in this file, in `BUSINESS-RULES.md` and in doc comments, so someone reading the code has to go one step further to learn why a rule exists. the narrow-screen table rule is a compromise: six columns do not fit a phone, so those screens scroll. and the interface is plainer than a marketing page would be, which is the point, but it does mean a new screen inherits an unwritten obligation to be checked against the rules above rather than a template that enforces them.
+
+## D25 — the stylesheet is revalidated, not cached blind
+
+**date** 2026-11-03 · **status** accepted
+
+**context** the css is embedded in the binary and served from it. a file in an embedded filesystem carries no modification time, so `http.FileServerFS` sends no `Last-Modified` and no `ETag`, and the handler's `Cache-Control: public, max-age=300` left a browser free to paint last week's stylesheet over this week's markup for five minutes with no way to ask whether anything changed. this was found the honest way: a rule was added, measured as having no effect, and the browser turned out to be holding a copy from before the restart.
+
+**decision** `staticHandler` serves with `Cache-Control: no-cache` and an `ETag` built from the sha256 of the file's own bytes, answering `If-None-Match` with `304`. a request costs a header exchange, never a stale rule. the tag is derived from content, so it changes exactly when the file does, which also means it survives a rebuild that changes nothing.
+
+**why** the one thing worse than an uncached stylesheet is a cached one that disagrees with the html it is painting. revalidation is cheap, and it makes "restart the server, reload the page" true again instead of "restart the server, reload, and hope".
+
+**cost** one conditional request per page load instead of zero for five minutes. at this traffic that is nothing, and a 304 carries no body.

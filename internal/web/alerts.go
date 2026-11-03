@@ -54,6 +54,7 @@ func (s *Server) alertsPage() http.HandlerFunc {
 			TenantName: t.Name,
 			UserName:   u.User.Name,
 			Nav:        navLinks(r.Context(), r.URL.Path),
+			CSRFToken:  csrfToken(r.Context()),
 			Rows:       alertRows(rows),
 			Email:      settings.AlertEmail,
 			Telegram:   settings.AlertTelegramChat,
@@ -69,7 +70,6 @@ func alertRows(alerts []store.Alert) []views.AlertRow {
 			sent = a.SentAt.UTC().Format("2006-01-02 15:04")
 		}
 		rows = append(rows, views.AlertRow{
-			Kind:      a.Kind,
 			KindLabel: alertKindLabel(a.Kind),
 			Message:   a.Message,
 			Severity:  a.Severity,

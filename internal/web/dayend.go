@@ -217,6 +217,7 @@ func (s *Server) dayEndDetailPage() http.HandlerFunc {
 			TenantName: t.Name,
 			UserName:   u.User.Name,
 			Nav:        navLinks(r.Context(), r.URL.Path),
+			CSRFToken:  csrfToken(r.Context()),
 			End:        *dayEndView(end),
 			Closed:     r.URL.Query().Get("closed") == "1",
 			Exists:     r.URL.Query().Get("exists") == "1",

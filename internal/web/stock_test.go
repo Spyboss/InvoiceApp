@@ -49,7 +49,7 @@ func TestCustomerAndVehicleFlow(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /customers = %d, want 200", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "No customers match") {
+	if !strings.Contains(rec.Body.String(), "No customers yet.") {
 		t.Fatalf("empty list body:\n%s", rec.Body.String())
 	}
 
@@ -170,7 +170,7 @@ func TestCustomerAndVehicleFlow(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /stock = %d, want 200", rec.Code)
 	}
-	for _, want := range []string{"On hand", "1 units received, minus sold", "intake", "APE City"} {
+	for _, want := range []string{"On hand", "<dt>Ledger</dt><dd>1</dd>", "intake", "APE City"} {
 		if !strings.Contains(rec.Body.String(), want) {
 			t.Errorf("stock page missing %q:\n%s", want, rec.Body.String())
 		}

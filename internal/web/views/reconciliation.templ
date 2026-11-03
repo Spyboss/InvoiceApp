@@ -48,23 +48,17 @@ type ReconciliationData struct {
 	DateFrom   string
 	DateTo     string
 	Problems   []ImportProblem
-	// Attempted says a file was uploaded, so an empty problem list means the
-	// comparison ran rather than that nobody has tried yet.
-	Attempted bool
-	Run       *ReconcileRunView
-	Runs      []ReconcileRunRow
+	Run        *ReconcileRunView
+	Runs       []ReconcileRunRow
 }
 
 templ Reconciliation(d ReconciliationData) {
-	@Layout("Reconciliation", d.TenantName, d.UserName, d.Nav, reconciliationBody(d))
+	@Layout("Reconciliation", d.TenantName, d.UserName, d.CSRFToken, d.Nav, reconciliationBody(d))
 }
 
 templ reconciliationBody(d ReconciliationData) {
 	<article class="wide">
-		<header>
-			<h1>Reconciliation</h1>
-			<p class="muted">Check a file the old app wrote against this book over a range of days. Only papers that came in from a file are compared, so an invoice this app issued itself is never counted as a difference.</p>
-		</header>
+		<h1>Reconciliation</h1>
 
 		if len(d.Problems) > 0 {
 			<section role="alert">
@@ -79,7 +73,6 @@ templ reconciliationBody(d ReconciliationData) {
 						</li>
 					}
 				</ul>
-				<p class="muted">No run was recorded. Correct the file or the days above and check again.</p>
 			</section>
 		}
 
@@ -87,7 +80,7 @@ templ reconciliationBody(d ReconciliationData) {
 			<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
 
 			<label>
-				invoices.csv
+				File
 				<input type="file" name="file" accept=".csv,text/csv" required/>
 			</label>
 
@@ -101,85 +94,73 @@ templ reconciliationBody(d ReconciliationData) {
 				<input type="date" name="date_to" value={ d.DateTo } required/>
 			</label>
 
-			<button type="submit">Check the file against the book</button>
+			<button type="submit">Check against the book</button>
 		</form>
 
 		if d.Run != nil {
-			<h2>This run</h2>
-			<dl class="facts">
-				<dt>Days</dt>
-				<dd>{ d.Run.Range }</dd>
-				<dt>File</dt>
-				<dd>{ d.Run.Filename } <small class="muted">sha256 { d.Run.SHA }</small></dd>
-				<dt>Run by</dt>
-				<dd>{ d.Run.Who } on { d.Run.At.UTC().Format("2006-01-02 15:04") } UTC</dd>
-				<dt>Result</dt>
-				<dd>
-					if d.Run.Matched {
-						<strong>The book agrees with the file on every day.</strong>
-					} else {
-						<strong role="alert">The book differs from the file.</strong>
-						{ d.Run.Difference }
-					}
-				</dd>
-			</dl>
-
-			if !d.Run.Matched {
-				<p>The first difference points at the day to open; the alert this run raised carries the same sentence.</p>
-				<ul>
-					for _, line := range d.Run.Lines {
-						if !line.Matched {
-							<li>
-								<strong>{ line.Day }</strong>, { line.Type }: { line.Difference }
-							</li>
+			<section aria-live="polite">
+				<h2>Run</h2>
+				<dl class="facts">
+					<dt>Days</dt>
+					<dd>{ d.Run.Range }</dd>
+					<dt>File</dt>
+					<dd>{ d.Run.Filename } <small class="muted">{ d.Run.SHA }</small></dd>
+					<dt>By</dt>
+					<dd>{ d.Run.Who }, { d.Run.At.UTC().Format("2006-01-02 15:04") } UTC</dd>
+					<dt>Result</dt>
+					<dd>
+						if d.Run.Matched {
+							<span class="status">agrees</span>
+						} else {
+							<span class="status">differs</span> { d.Run.Difference }
 						}
-					}
-				</ul>
-			}
+					</dd>
+				</dl>
 
-			<div class="table-scroll">
-				<table>
-					<thead>
-						<tr>
-							<th scope="col">Day</th>
-							<th scope="col">Paper</th>
-							<th scope="col">File: papers</th>
-							<th scope="col">File: price (Rs)</th>
-							<th scope="col">File: down (Rs)</th>
-							<th scope="col">Book: papers</th>
-							<th scope="col">Book: price (Rs)</th>
-							<th scope="col">Book: down (Rs)</th>
-							<th scope="col">Result</th>
-						</tr>
-					</thead>
-					<tbody>
-						for _, line := range d.Run.Lines {
+				<div class="table-scroll">
+					<table>
+						<thead>
 							<tr>
-								<td>{ line.Day }</td>
-								<td>{ line.Type }</td>
-								<td>{ line.FilePapers }</td>
-								<td>{ line.FileGross }</td>
-								<td>{ line.FileDown }</td>
-								<td>{ line.BookPapers }</td>
-								<td>{ line.BookGross }</td>
-								<td>{ line.BookDown }</td>
-								<td>
-									if line.Matched {
-										<span class="status">agrees</span>
-									} else {
-										<span class="status">differs</span>
-									}
-								</td>
+								<th scope="col">Day</th>
+								<th scope="col">Paper</th>
+								<th scope="col">File papers</th>
+								<th scope="col">File price (Rs)</th>
+								<th scope="col">File down (Rs)</th>
+								<th scope="col">Book papers</th>
+								<th scope="col">Book price (Rs)</th>
+								<th scope="col">Book down (Rs)</th>
+								<th scope="col">Result</th>
 							</tr>
-						}
-					</tbody>
-				</table>
-			</div>
+						</thead>
+						<tbody>
+							for _, line := range d.Run.Lines {
+								<tr>
+									<td>{ line.Day }</td>
+									<td>{ line.Type }</td>
+									<td>{ line.FilePapers }</td>
+									<td>{ line.FileGross }</td>
+									<td>{ line.FileDown }</td>
+									<td>{ line.BookPapers }</td>
+									<td>{ line.BookGross }</td>
+									<td>{ line.BookDown }</td>
+									<td>
+										if line.Matched {
+											<span class="status">agrees</span>
+										} else {
+											<span class="status">differs</span>
+										}
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			</section>
 		}
 
 		<h2>Runs</h2>
 		if len(d.Runs) == 0 {
-			<p class="muted">No file has been checked against the book yet.</p>
+			<p class="muted">No file has been checked yet.</p>
 		} else {
 			<div class="table-scroll">
 				<table>

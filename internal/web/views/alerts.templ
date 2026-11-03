@@ -1,9 +1,11 @@
 package views
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 type AlertRow struct {
-	Kind      string
 	KindLabel string
 	Message   string
 	Severity  string
@@ -18,40 +20,29 @@ type AlertsData struct {
 	TenantName string
 	UserName   string
 	Nav        []NavLink
+	CSRFToken  string
 	Rows       []AlertRow
-	// Delivery says where these go besides this page, in the owner's own
-	// words from settings: nothing configured means the page is the only
-	// place they land.
+	// Email and Telegram are the channels set in settings, so the page can say
+	// where an alert went as well as whether it went.
 	Email    string
 	Telegram string
 }
 
 templ Alerts(d AlertsData) {
-	@Layout("Alerts", d.TenantName, d.UserName, d.Nav, alertsBody(d))
+	@Layout("Alerts", d.TenantName, d.UserName, d.CSRFToken, d.Nav, alertsBody(d))
 }
 
 templ alertsBody(d AlertsData) {
 	<article class="wide">
-		<header>
-			<h1>Alerts</h1>
-			<p class="muted">Things that needed a person: a void, a drawer past its limit, a missing number. Newest first.</p>
-		</header>
+		<h1>Alerts</h1>
 
-		if d.Email == "" && d.Telegram == "" {
-			<p role="status">No alert channel is set in settings, so everything lands on this page only.</p>
-		} else {
-			<p class="muted">
-				if d.Email != "" {
-					Sent to { d.Email }.
-				}
-				if d.Telegram != "" {
-					Sent to the Telegram chat { d.Telegram }.
-				}
-			</p>
-		}
+		<dl class="facts">
+			<dt>Delivery</dt>
+			<dd>{ deliveryLine(d.Email, d.Telegram) }</dd>
+		</dl>
 
 		if len(d.Rows) == 0 {
-			<p>Nothing has fired. That is the good answer.</p>
+			<p class="muted">Nothing has fired.</p>
 		} else {
 			<div class="table-scroll">
 				<table>
@@ -73,6 +64,9 @@ templ alertsBody(d AlertsData) {
 								<td><span class="status">{ row.Severity }</span></td>
 								<td>
 									<span class="status">{ row.Status }</span>
+									if row.Sent != "" {
+										<small>{ row.Sent }</small>
+									}
 									if row.Attempts > 1 {
 										<small>{ row.Attempts } tries</small>
 									}
@@ -87,4 +81,20 @@ templ alertsBody(d AlertsData) {
 			</div>
 		}
 	</article>
+}
+
+// deliveryLine says where alerts are sent besides this page, named by channel
+// so an empty setting reads as a fact rather than a warning.
+func deliveryLine(email, telegram string) string {
+	channels := make([]string, 0, 2)
+	if email != "" {
+		channels = append(channels, email)
+	}
+	if telegram != "" {
+		channels = append(channels, "Telegram "+telegram)
+	}
+	if len(channels) == 0 {
+		return "this page only"
+	}
+	return strings.Join(channels, ", ")
 }

@@ -27,6 +27,7 @@ type StockData struct {
 	TenantName string
 	UserName   string
 	Nav        []NavLink
+	CSRFToken  string
 	Totals     StockTotals
 	Balanced   bool
 	Vehicles   []VehicleRow
@@ -34,15 +35,12 @@ type StockData struct {
 }
 
 templ Stock(d StockData) {
-	@Layout("Stock", d.TenantName, d.UserName, d.Nav, stockBody(d))
+	@Layout("Stock", d.TenantName, d.UserName, d.CSRFToken, d.Nav, stockBody(d))
 }
 
 templ stockBody(d StockData) {
 	<article class="wide">
-		<header>
-			<h1>Stock</h1>
-			<p class="muted">One row per physical unit. The ledger is append only and cannot be edited.</p>
-		</header>
+		<h1>Stock</h1>
 
 		if !d.Balanced {
 			<p role="alert">The ledger and the yard count disagree. Do not sell from this list until someone checks the stock movements.</p>
@@ -67,8 +65,8 @@ templ stockBody(d StockData) {
 				<dt>Returned</dt>
 				<dd>{ d.Totals.Returned }</dd>
 			}
-			<dt>Ledger total</dt>
-			<dd>{ d.Totals.Ledger } units received, minus sold</dd>
+			<dt>Ledger</dt>
+			<dd>{ d.Totals.Ledger }</dd>
 		</dl>
 
 		<h2>In the yard</h2>

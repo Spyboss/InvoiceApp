@@ -27,12 +27,12 @@ func Setup(bootstrap bool, tenantName string, dealership string, name string, em
 		ctx = templ.InitializeContext(ctx)
 		ctx = templ.ClearChildren(ctx)
 		if bootstrap {
-			templ_7745c5c3_Err = Layout("Set up", "New installation", "", nil, setupBody(true, tenantName, dealership, name, email, message, csrf)).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = Layout("Set up", "New installation", "", csrf, nil, setupBody(true, tenantName, dealership, name, email, message, csrf)).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = Layout("Set up", tenantName, "", nil, setupBody(false, tenantName, dealership, name, email, message, csrf)).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = Layout("Set up", tenantName, "", csrf, nil, setupBody(false, tenantName, dealership, name, email, message, csrf)).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -63,7 +63,7 @@ func setupBody(bootstrap bool, tenantName string, dealership string, name string
 			return templ_7745c5c3_Err
 		}
 		if bootstrap {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<h1>Set up this dealership</h1><p>This installation has no account yet. The first account becomes the owner.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<h1>Set up this dealership</h1><p>The first account becomes the owner.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -167,7 +167,7 @@ func setupBody(bootstrap bool, tenantName string, dealership string, name string
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\" autocomplete=\"username\" required></label> <label>Password <input type=\"password\" name=\"password\" minlength=\"12\" autocomplete=\"new-password\" required> <small>At least 12 characters.</small></label> <label>Repeat password <input type=\"password\" name=\"confirm\" minlength=\"12\" autocomplete=\"new-password\" required></label> <button type=\"submit\">Create account</button></form></article>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\" autocomplete=\"username\" required></label> <label>Password (12 characters or more) <input type=\"password\" name=\"password\" minlength=\"12\" autocomplete=\"new-password\" required></label> <label>Repeat password <input type=\"password\" name=\"confirm\" minlength=\"12\" autocomplete=\"new-password\" required></label> <button type=\"submit\">Create account</button></form></article>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

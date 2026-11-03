@@ -50,6 +50,7 @@ func (s *Server) customersPage() http.HandlerFunc {
 			TenantName: t.Name,
 			UserName:   u.User.Name,
 			Nav:        navLinks(r.Context(), r.URL.Path),
+			CSRFToken:  csrfToken(r.Context()),
 			Query:      search,
 			CanWrite:   auth.Can(r.Context(), "customer.write"),
 			Rows:       rows,

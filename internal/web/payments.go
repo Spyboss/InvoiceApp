@@ -53,6 +53,7 @@ func (s *Server) paymentsPage() http.HandlerFunc {
 			TenantName: t.Name,
 			UserName:   u.User.Name,
 			Nav:        navLinks(r.Context(), r.URL.Path),
+			CSRFToken:  csrfToken(r.Context()),
 			Query:      filter.Search,
 			Method:     method,
 			From:       dateValue(filter.From),

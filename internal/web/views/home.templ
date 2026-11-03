@@ -6,36 +6,35 @@ type HomeData struct {
 	TenantName  string
 	UserName    string
 	Nav         []NavLink
+	CSRFToken   string
 	Email       string
 	Role        string
 	Permissions []string
-	CSRFToken   string
-	CanSeeAudit bool
 	SessionEnds time.Time
 }
 
 templ Home(d HomeData) {
-	@Layout("Home", d.TenantName, d.UserName, d.Nav, homeBody(d))
+	@Layout("Home", d.TenantName, d.UserName, d.CSRFToken, d.Nav, homeBody(d))
 }
 
 templ homeBody(d HomeData) {
 	<article>
-		<header>
-			<h1>{ d.UserName }</h1>
-			<p>{ d.Email }</p>
-		</header>
+		<h1>{ d.UserName }</h1>
+
 		<dl class="facts">
+			<dt>Email</dt>
+			<dd>{ d.Email }</dd>
 			<dt>Dealership</dt>
 			<dd>{ d.TenantName }</dd>
 			<dt>Role</dt>
 			<dd>{ d.Role }</dd>
-			<dt>Session ends</dt>
+			<dt>Signed in until</dt>
 			<dd>{ d.SessionEnds.UTC().Format("2 Jan 2006 15:04") } UTC</dd>
 		</dl>
 
 		<h2>Permissions</h2>
 		if len(d.Permissions) == 0 {
-			<p class="muted">No extra permissions. Ask the owner if you need access.</p>
+			<p class="muted">No extra permissions.</p>
 		} else {
 			<ul class="permissions">
 				for _, p := range d.Permissions {
@@ -43,15 +42,5 @@ templ homeBody(d HomeData) {
 				}
 			</ul>
 		}
-
-		<footer>
-			if d.CanSeeAudit {
-				<p><a href="/audit">Audit log</a></p>
-			}
-			<form method="post" action="/logout">
-				<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
-				<button type="submit" class="secondary">Sign out</button>
-			</form>
-		</footer>
 	</article>
 }

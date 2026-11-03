@@ -1,40 +1,50 @@
 package views
 
 type SettingsData struct {
-	TenantName     string
-	UserName       string
-	Nav            []NavLink
-	CSRFToken      string
-	CompanyName    string
-	Address        string
-	Phone          string
-	Email          string
-	VATNumber      string
-	DiscountLimit  string
-	VarianceAlert  string
-	BackdateDays   string
-	AlertEmail     string
-	AlertTelegram  string
-	CanWrite       bool
-	Error          string
+	TenantName    string
+	UserName      string
+	Nav           []NavLink
+	CSRFToken     string
+	CompanyName   string
+	Address       string
+	Phone         string
+	Email         string
+	VATNumber     string
+	DiscountLimit string
+	VarianceAlert string
+	BackdateDays  string
+	AlertEmail    string
+	AlertTelegram string
+	CanWrite      bool
+	Error         string
 }
 
 templ Settings(d SettingsData) {
-	@Layout("Settings", d.TenantName, d.UserName, d.Nav, settingsBody(d))
+	@Layout("Settings", d.TenantName, d.UserName, d.CSRFToken, d.Nav, settingsBody(d))
 }
 
 templ settingsBody(d SettingsData) {
 	<article class="narrow">
-		<header>
-			<h1>Settings</h1>
-			<p class="muted">Own dealership details and the rules that control discounts, backdates and alerts.</p>
-		</header>
+		<h1>Settings</h1>
 
 		if d.Error != "" {
 			<p role="alert">{ d.Error }</p>
 		}
 
-		if d.CanWrite {
+		if !d.CanWrite {
+			<dl class="facts">
+				<dt>Company name</dt>
+				<dd>{ orDash(d.CompanyName) }</dd>
+				<dt>Address</dt>
+				<dd>{ orDash(d.Address) }</dd>
+				<dt>Phone</dt>
+				<dd>{ orDash(d.Phone) }</dd>
+				<dt>Email</dt>
+				<dd>{ orDash(d.Email) }</dd>
+				<dt>VAT number</dt>
+				<dd>{ orDash(d.VATNumber) }</dd>
+			</dl>
+		} else {
 			<form method="post" action="/settings" class="narrow">
 				<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
 
@@ -100,8 +110,6 @@ templ settingsBody(d SettingsData) {
 					<button type="submit">Save</button>
 				</div>
 			</form>
-		} else {
-			<p role="status">Only the owner can change settings.</p>
 		}
 	</article>
 }

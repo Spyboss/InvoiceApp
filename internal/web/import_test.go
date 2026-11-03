@@ -219,10 +219,10 @@ func TestImportInvoicesUploadWritesTheBook(t *testing.T) {
 	// are the ones the run was accepted on.
 	body = importPage(t, c, location)
 	for _, want := range []string{
-		"2 written, 0 already in the book",
-		"2 papers worth 2,500,000.00, 1,500,000.00 paid, 1,000,000.00 owing",
-		"The file and the app agree on every row.",
-		"Imported invoices file",
+		"<dt>Written</dt><dd>2</dd>",
+		"<dt>Already there</dt><dd>0</dd>",
+		"<td>2</td><td>2,500,000.00</td><td>1,500,000.00</td><td>1,000,000.00</td>",
+		"invoices file",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the run page is missing %q:\n%s", want, body)
@@ -248,8 +248,10 @@ func TestImportInvoicesUploadWritesTheBook(t *testing.T) {
 		t.Fatalf("second upload = %d, want 303:\n%s", rec.Code, rec.Body.String())
 	}
 	body = importPage(t, c, rec.Header().Get("Location"))
-	if !strings.Contains(body, "0 written, 2 already in the book") {
-		t.Errorf("a repeated import is not reported as a no-op:\n%s", body)
+	for _, want := range []string{"<dt>Written</dt><dd>0</dd>", "<dt>Already there</dt><dd>2</dd>"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("a repeated import is not reported as a no-op, missing %q:\n%s", want, body)
+		}
 	}
 }
 
@@ -273,10 +275,14 @@ func TestImportInvoicesRefusesTheWholeFileAndSaysWhy(t *testing.T) {
 		t.Fatalf("POST a file that does not add up = %d, want 400:\n%s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"The file was not imported", "Line 3", "does not add up", "Nothing was written"} {
+	for _, want := range []string{"Not imported", "Line 3", "does not add up"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the refusal is missing %q:\n%s", want, body)
 		}
+	}
+	// A refused file records no run at all, so the history below stays empty.
+	if strings.Contains(body, "<h2>Run</h2>") {
+		t.Errorf("a refused file was recorded as a run:\n%s", body)
 	}
 	// What was typed survives the refusal.
 	if !strings.Contains(body, `value="Piaggio"`) {
@@ -377,9 +383,9 @@ func TestImportStockUploadBringsTheYardIn(t *testing.T) {
 	}
 	body := importPage(t, c, rec.Header().Get("Location"))
 	for _, want := range []string{
-		"2 written, 0 already in the book",
-		"2 units, cost 2,100,000.00, asking 2,500,000.00",
-		"The file and the app agree on every row.",
+		"<dt>Written</dt><dd>2</dd>",
+		"<td>2</td><td>2,100,000.00</td><td>2,500,000.00</td>",
+		"stock sheet",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the stock run page is missing %q:\n%s", want, body)
@@ -425,8 +431,8 @@ func TestReconciliationChecksTheFileAgainstTheBook(t *testing.T) {
 	}
 	body := importPage(t, c, rec.Header().Get("Location"))
 	for _, want := range []string{
-		"The book agrees with the file on every day.",
-		"agrees",
+		"<dt>Result</dt><dd><span class=\"status\">agrees</span></dd>",
+		"<span class=\"status\">agrees</span>",
 		"cash invoices",
 	} {
 		if !strings.Contains(body, want) {

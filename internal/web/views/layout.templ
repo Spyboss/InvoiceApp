@@ -10,7 +10,9 @@ type NavLink struct {
 	Here  bool
 }
 
-templ Layout(title string, tenantName string, userName string, nav []NavLink, body templ.Component) {
+// Layout is the frame every page shares: whose dealership this is, where else
+// the person can go, who they are signed in as, and the way out.
+templ Layout(title string, tenantName string, userName string, csrf string, nav []NavLink, body templ.Component) {
 	<!DOCTYPE html>
 	<html lang="en">
 		<head>
@@ -32,7 +34,13 @@ templ Layout(title string, tenantName string, userName string, nav []NavLink, bo
 					</nav>
 				}
 				if userName != "" {
-					<span class="who">{ userName }</span>
+					<div class="account">
+						<span class="who">{ userName }</span>
+						<form method="post" action="/logout">
+							<input type="hidden" name="csrf_token" value={ csrf }/>
+							<button type="submit">Sign out</button>
+						</form>
+					</div>
 				}
 			</header>
 			<main class="container">

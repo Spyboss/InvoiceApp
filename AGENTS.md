@@ -26,6 +26,20 @@ if the task is not covered by the current step, say so instead of inventing scop
 - **no secrets in the repo.** env only. `.env` is gitignored.
 - **no new dependency** without a one-line reason in the commit message. stdlib first.
 
+## the interface
+
+the screens are read at a counter, in a hurry, by someone whose job is not this software. D24 is the full reasoning; these are the rules that come out of it.
+
+- **one frame.** every page goes through `views.Layout(title, tenant, user, csrf, nav, body)`. it carries the dealership, the destinations, who is signed in and the way out. no page repeats a sign-out form, a back link or its own navigation.
+- **a heading is a heading.** no tagline under an `h1`. if a screen needs a sentence to make sense, fix the layout.
+- **no helper text under an input.** the constraint folds into the label: "Password (12 characters or more)".
+- **no explaining a rule in advance.** the refusal exists; the attempt is where it speaks.
+- **facts are `dl.facts` or a table.** no prose paragraph holding three figures that could be terms and definitions.
+- **empty states are one short line, no advice**, and "none yet" is worded differently from "no match" using the filter values the page already holds.
+- **a search field says what it searches**: `placeholder="Search customers"` and an `aria-label`, never a list of columns.
+- **a table wider than the screen scrolls inside its own box** (`.table-scroll`); the page itself never scrolls sideways. money is never wrapped or abbreviated; at `max-width: 45rem` a cell gives up padding first.
+- **no dead branches in a view.** a field no template draws is deleted, not kept for a screen that may come.
+
 ## definition of done for any step
 
 ```
@@ -35,7 +49,9 @@ templ generate -check           # fails if a .templ change was not regenerated
 golangci-lint run ./...           (if installed)
 ```
 
-plus: server boots, the new screen works on a 360px wide viewport, and the step's acceptance test in `docs/PLAN.md` is true.
+plus: server boots, the new screen works at 360px wide (`document.documentElement.scrollWidth === clientWidth`; a wide table scrolls inside `.table-scroll` rather than pushing the page), and the step's acceptance test in `docs/PLAN.md` is true.
+
+css and `.templ` are embedded in the binary: a change needs `templ generate` and a server restart before a browser will see it. the stylesheet is served with an `ETag` and `no-cache` (D25), so a plain reload is enough once the binary is new.
 
 ## commands
 

@@ -48,6 +48,30 @@
 	font-size: 0.9rem;
 }
 
+/* Who is signed in and the way out, kept together on the right of the header
+   so every screen can sign out and none of them repeats the footer. */
+.site-header .account {
+	display: flex;
+	align-items: baseline;
+	gap: 0.75rem;
+}
+
+.site-header .account form {
+	margin: 0;
+}
+
+.site-header .account button {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--pico-primary);
+	font-size: 0.9rem;
+	font-weight: 400;
+	text-decoration: underline;
+	cursor: pointer;
+}
+
 article.narrow {
 	max-width: 26rem;
 	margin-inline: auto;
@@ -86,8 +110,59 @@ article.wide {
 	padding: 0.15rem 0.45rem;
 }
 
+/* A table wider than the screen scrolls inside its own box rather than pushing
+   the page sideways. Money is never wrapped, so on a phone the widest tables
+   (six columns) are read by swiping; the thin bar says there is more to the
+   right instead of the last figure looking cut off. */
 .table-scroll {
 	overflow-x: auto;
+	scrollbar-width: thin;
+}
+
+.table-scroll::-webkit-scrollbar {
+	height: 0.5rem;
+}
+
+.table-scroll::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.table-scroll::-webkit-scrollbar-thumb {
+	background: var(--pico-muted-border-color);
+	border-radius: 0.25rem;
+}
+
+/* A narrow screen keeps every figure whole: the cell gives up padding before a
+   money column is cut. */
+@media (max-width: 45rem) {
+	.table-scroll th,
+	.table-scroll td {
+		padding-inline: 0.35rem;
+	}
+
+	.table-scroll th:first-child,
+	.table-scroll td:first-child {
+		padding-inline-start: 0;
+	}
+}
+
+/* Two forms or two panels side by side when there is room, stacked when there
+   is not. No words needed to say which is which: each has its own heading. */
+.split {
+	display: grid;
+	gap: 1rem 2rem;
+	align-items: start;
+}
+
+@media (min-width: 45rem) {
+	.split {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+
+.split > form > h2:first-of-type,
+.split > section > h2:first-of-type {
+	margin-top: 0;
 }
 
 .search {

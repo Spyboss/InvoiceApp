@@ -20,6 +20,7 @@ type SalesReportData struct {
 	TenantName string
 	UserName   string
 	Nav        []NavLink
+	CSRFToken  string
 	From       string
 	To         string
 	Invalid    bool
@@ -30,7 +31,7 @@ type SalesReportData struct {
 }
 
 templ SalesReport(d SalesReportData) {
-	@Layout("Sales report", d.TenantName, d.UserName, d.Nav, salesReportBody(d))
+	@Layout("Sales report", d.TenantName, d.UserName, d.CSRFToken, d.Nav, salesReportBody(d))
 }
 
 templ salesReportBody(d SalesReportData) {
@@ -43,14 +44,10 @@ templ salesReportBody(d SalesReportData) {
 				<input type="date" name="to" value={ d.To } aria-label="To date"/>
 				<button type="submit" class="secondary">Show</button>
 			</form>
-			<p class="muted">{ d.From } to { d.To }. Quotations and advance receipts are not sales and are not counted here.</p>
 		</header>
 
 		if d.Invalid {
-			<p role="alert">The period starts after it ends, so there is nothing to show. Swap the two dates.</p>
-		}
-		if !d.ReadAll {
-			<p class="muted">You see the invoices you issued. The owner, manager and accounts see every invoice.</p>
+			<p role="alert">The period starts after it ends.</p>
 		}
 
 		<h2>By document</h2>
@@ -158,6 +155,7 @@ type ReceivablesReportData struct {
 	TenantName     string
 	UserName       string
 	Nav            []NavLink
+	CSRFToken      string
 	AsOf           string
 	ReadAll        bool
 	Rows           []ReceivableRow
@@ -169,7 +167,7 @@ type ReceivablesReportData struct {
 }
 
 templ ReceivablesReport(d ReceivablesReportData) {
-	@Layout("Receivables", d.TenantName, d.UserName, d.Nav, receivablesReportBody(d))
+	@Layout("Receivables", d.TenantName, d.UserName, d.CSRFToken, d.Nav, receivablesReportBody(d))
 }
 
 templ receivablesReportBody(d ReceivablesReportData) {
@@ -181,15 +179,10 @@ templ receivablesReportBody(d ReceivablesReportData) {
 				<input type="date" name="as_of" value={ d.AsOf } aria-label="As at date"/>
 				<button type="submit" class="secondary">Show</button>
 			</form>
-			<p class="muted">What is still owed as at { d.AsOf }, oldest first.</p>
 		</header>
 
-		if !d.ReadAll {
-			<p class="muted">You see the invoices you issued. The owner, manager and accounts see every invoice.</p>
-		}
-
 		if !d.HasOutstanding {
-			<p class="muted">Nothing is owed. Every invoice is settled.</p>
+			<p class="muted">Nothing is owed.</p>
 		} else {
 			<dl class="facts">
 				<dt>Outstanding</dt>
@@ -302,6 +295,7 @@ type StockReportData struct {
 	TenantName  string
 	UserName    string
 	Nav         []NavLink
+	CSRFToken   string
 	AsOf        string
 	IncludeCost bool
 	Statuses    []StockStatusRow
@@ -313,7 +307,7 @@ type StockReportData struct {
 }
 
 templ StockReport(d StockReportData) {
-	@Layout("Stock report", d.TenantName, d.UserName, d.Nav, stockReportBody(d))
+	@Layout("Stock report", d.TenantName, d.UserName, d.CSRFToken, d.Nav, stockReportBody(d))
 }
 
 templ stockReportBody(d StockReportData) {
@@ -321,18 +315,21 @@ templ stockReportBody(d StockReportData) {
 		<header>
 			<h1>Stock</h1>
 			@reportTabs("stock")
-			<p class="muted">The yard as at { d.AsOf }. Ageing counts the days a unit has stood here since it was received.</p>
 		</header>
 
 		if d.EmptyYard {
 			<p class="muted">No units have been received yet.</p>
 		} else {
 			<dl class="facts">
+				<dt>As at</dt>
+				<dd>{ d.AsOf }</dd>
 				<dt>On hand</dt>
-				<dd><strong>{ d.OnHand }</strong> units worth Rs { d.OnHandSale } at the price on the windscreen</dd>
+				<dd><strong>{ d.OnHand }</strong> units</dd>
+				<dt>Asking total</dt>
+				<dd>Rs { d.OnHandSale }</dd>
 				if d.IncludeCost {
-					<dt>Capital in the yard</dt>
-					<dd>Rs { d.OnHandCost } at cost</dd>
+					<dt>Capital at cost</dt>
+					<dd>Rs { d.OnHandCost }</dd>
 				}
 			</dl>
 
@@ -364,7 +361,7 @@ templ stockReportBody(d StockReportData) {
 				</table>
 			</div>
 
-			<h2>Ageing of what is on hand</h2>
+			<h2>Ageing</h2>
 			if len(d.Ageing) == 0 {
 				<p class="muted">Nothing is on hand.</p>
 			} else {

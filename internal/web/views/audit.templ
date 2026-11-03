@@ -19,18 +19,15 @@ type AuditData struct {
 }
 
 templ Audit(d AuditData) {
-	@Layout("Audit log", d.TenantName, d.UserName, d.Nav, auditBody(d))
+	@Layout("Audit log", d.TenantName, d.UserName, d.CSRFToken, d.Nav, auditBody(d))
 }
 
 templ auditBody(d AuditData) {
 	<article class="wide">
-		<header>
-			<h1>Audit log</h1>
-			<p class="muted">Everything that changed, newest first. This list cannot be edited.</p>
-		</header>
+		<h1>Audit log</h1>
 
 		if len(d.Rows) == 0 {
-			<p>Nothing recorded yet.</p>
+			<p class="muted">Nothing recorded yet.</p>
 		} else {
 			<div class="table-scroll">
 				<table>
@@ -57,13 +54,5 @@ templ auditBody(d AuditData) {
 				</table>
 			</div>
 		}
-
-		<footer>
-			<p><a href="/">Back</a></p>
-			<form method="post" action="/logout">
-				<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
-				<button type="submit" class="secondary">Sign out</button>
-			</form>
-		</footer>
 	</article>
 }

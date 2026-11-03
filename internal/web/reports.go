@@ -76,10 +76,10 @@ func (s *Server) salesReportPage() http.HandlerFunc {
 			TenantName: t.Name,
 			UserName:   u.User.Name,
 			Nav:        navLinks(r.Context(), r.URL.Path),
+			CSRFToken:  csrfToken(r.Context()),
 			From:       scope.From.Format("2006-01-02"),
 			To:         scope.To.Format("2006-01-02"),
 			Invalid:    scope.From.After(scope.To),
-			ReadAll:    scope.ReadAll,
 			Types:      salesTypeRows(report.ByType),
 			Users:      salesUserRows(report.ByUser),
 			Total: views.SalesTotalRow{
@@ -141,7 +141,7 @@ func (s *Server) receivablesReportPage() http.HandlerFunc {
 		if v := optionalDate(r.URL.Query().Get("as_of")); !v.IsZero() {
 			asOf = v
 		}
-		createdBy, readAll := s.reportOwner(r)
+		createdBy, _ := s.reportOwner(r)
 
 		var report store.ReceivablesReport
 		err := s.store.InTenant(r.Context(), t.ID, func(q *store.Store) error {
@@ -158,8 +158,8 @@ func (s *Server) receivablesReportPage() http.HandlerFunc {
 			TenantName:     t.Name,
 			UserName:       u.User.Name,
 			Nav:            navLinks(r.Context(), r.URL.Path),
+			CSRFToken:      csrfToken(r.Context()),
 			AsOf:           asOf.Format("2006-01-02"),
-			ReadAll:        readAll,
 			Rows:           receivableRows(report.Rows, true),
 			Buckets:        receivableBucketRows(report.Buckets),
 			ByFinance:      receivableFinanceRows(report.ByFinance),
@@ -249,6 +249,7 @@ func (s *Server) stockReportPage() http.HandlerFunc {
 			TenantName:  t.Name,
 			UserName:    u.User.Name,
 			Nav:         navLinks(r.Context(), r.URL.Path),
+			CSRFToken:   csrfToken(r.Context()),
 			AsOf:        asOf.Format("2006-01-02"),
 			IncludeCost: includeCost,
 			Statuses:    stockStatusRows(report.Statuses),

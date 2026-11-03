@@ -38,6 +38,7 @@ func (s *Server) stockPage() http.HandlerFunc {
 			TenantName: t.Name,
 			UserName:   u.User.Name,
 			Nav:        navLinks(r.Context(), r.URL.Path),
+			CSRFToken:  csrfToken(r.Context()),
 			Totals: views.StockTotals{
 				Available: summary.Available,
 				Reserved:  summary.Reserved,

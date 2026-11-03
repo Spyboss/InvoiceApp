@@ -35,7 +35,6 @@ func (s *Server) homePage() http.HandlerFunc {
 			Role:        u.User.Role,
 			Permissions: permissions,
 			CSRFToken:   csrfToken(r.Context()),
-			CanSeeAudit: auth.Can(r.Context(), "audit.view"),
 			SessionEnds: u.Session.ExpiresAt,
 		}))
 	}

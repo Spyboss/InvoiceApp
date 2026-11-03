@@ -27,22 +27,15 @@ type RoleOption struct {
 }
 
 templ Users(d UsersData) {
-	@Layout("Users", d.TenantName, d.UserName, d.Nav, usersBody(d))
+	@Layout("Users", d.TenantName, d.UserName, d.CSRFToken, d.Nav, usersBody(d))
 }
 
 templ usersBody(d UsersData) {
 	<article class="wide">
-		<header>
-			<h1>Users</h1>
-			<p class="muted">Who can sign in, what they are allowed to change, and who last signed in.</p>
-		</header>
-
-		if !d.CanManage {
-			<p role="status">Only the owner can change who can sign in.</p>
-		}
+		<h1>Users</h1>
 
 		if len(d.Rows) == 0 {
-			<p>No users.</p>
+			<p class="muted">No users.</p>
 		} else {
 			<div class="table-scroll">
 				<table>
@@ -97,7 +90,7 @@ templ usersBody(d UsersData) {
 											}
 											<form method="post" action={ "/users/" + row.ID + "/password" } class="inline">
 												<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
-												<input type="password" name="new_password" placeholder="New password" minlength="12" required/>
+												<input type="password" name="new_password" placeholder="New password" aria-label={ "New password for " + row.Name } minlength="12" required/>
 												<button type="submit" class="secondary">Reset password</button>
 											</form>
 										</div>

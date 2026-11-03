@@ -140,6 +140,36 @@ func TestStaticIsServed(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "--pico-primary") {
 		t.Error("app.css body does not look like our stylesheet")
 	}
+
+	// An embedded file has no modification time, so without a tag of our own a
+	// browser could keep the old stylesheet across a deploy. The tag must be
+	// there, and a second request carrying it must cost nothing.
+	tag := rec.Header().Get("ETag")
+	if tag == "" {
+		t.Fatal("the stylesheet carries no ETag")
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-cache" {
+		t.Errorf("Cache-Control = %q, want no-cache so the tag is revalidated", got)
+	}
+
+	again := httptest.NewRequest(http.MethodGet, "/static/app.css", nil)
+	again.Header.Set("If-None-Match", tag)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, again)
+	if rec.Code != http.StatusNotModified {
+		t.Errorf("a matching tag = %d, want 304", rec.Code)
+	}
+	if rec.Body.Len() != 0 {
+		t.Errorf("a 304 carried %d bytes of body", rec.Body.Len())
+	}
+
+	stale := httptest.NewRequest(http.MethodGet, "/static/app.css", nil)
+	stale.Header.Set("If-None-Match", `"not-the-current-bytes"`)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, stale)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "--pico-primary") {
+		t.Errorf("a stale tag = %d, want the file back", rec.Code)
+	}
 }
 
 func TestPostWithoutCSRFIsRejected(t *testing.T) {

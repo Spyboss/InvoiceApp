@@ -2,9 +2,9 @@ package views
 
 templ Setup(bootstrap bool, tenantName string, dealership string, name string, email string, message string, csrf string) {
 	if bootstrap {
-		@Layout("Set up", "New installation", "", nil, setupBody(true, tenantName, dealership, name, email, message, csrf))
+		@Layout("Set up", "New installation", "", csrf, nil, setupBody(true, tenantName, dealership, name, email, message, csrf))
 	} else {
-		@Layout("Set up", tenantName, "", nil, setupBody(false, tenantName, dealership, name, email, message, csrf))
+		@Layout("Set up", tenantName, "", csrf, nil, setupBody(false, tenantName, dealership, name, email, message, csrf))
 	}
 }
 
@@ -12,7 +12,7 @@ templ setupBody(bootstrap bool, tenantName string, dealership string, name strin
 	<article class="narrow">
 		if bootstrap {
 			<h1>Set up this dealership</h1>
-			<p>This installation has no account yet. The first account becomes the owner.</p>
+			<p>The first account becomes the owner.</p>
 		} else {
 			<h1>Create the owner account</h1>
 			<p>{ tenantName } has no users yet. The first account becomes the owner.</p>
@@ -37,9 +37,8 @@ templ setupBody(bootstrap bool, tenantName string, dealership string, name strin
 				<input type="email" name="email" value={ email } autocomplete="username" required/>
 			</label>
 			<label>
-				Password
+				Password (12 characters or more)
 				<input type="password" name="password" minlength="12" autocomplete="new-password" required/>
-				<small>At least 12 characters.</small>
 			</label>
 			<label>
 				Repeat password

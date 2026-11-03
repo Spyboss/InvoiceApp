@@ -39,8 +39,7 @@ func (s *Server) reconciliationPage() http.HandlerFunc {
 		}
 
 		s.renderReconciliation(w, r, t, u, http.StatusOK, reconcilePageInput{
-			RunID:     runID,
-			Attempted: runID != nil,
+			RunID: runID,
 		})
 	}
 }
@@ -57,14 +56,13 @@ func (s *Server) reconcileSubmit() http.HandlerFunc {
 		}
 
 		in := reconcilePageInput{
-			DateFrom:  strings.TrimSpace(r.PostFormValue("date_from")),
-			DateTo:    strings.TrimSpace(r.PostFormValue("date_to")),
-			Attempted: true,
+			DateFrom: strings.TrimSpace(r.PostFormValue("date_from")),
+			DateTo:   strings.TrimSpace(r.PostFormValue("date_to")),
 		}
 
 		refuse := func(problems ...views.ImportProblem) {
 			s.renderReconciliation(w, r, t, u, http.StatusBadRequest, reconcilePageInput{
-				DateFrom: in.DateFrom, DateTo: in.DateTo, Problems: problems, Attempted: true,
+				DateFrom: in.DateFrom, DateTo: in.DateTo, Problems: problems,
 			})
 		}
 
@@ -140,11 +138,10 @@ func (s *Server) reconcileSubmit() http.HandlerFunc {
 // reconcilePageInput is what a render of the page can vary: the range being
 // checked, why a file was refused, and which run to show.
 type reconcilePageInput struct {
-	DateFrom  string
-	DateTo    string
-	Problems  []views.ImportProblem
-	RunID     *uuid.UUID
-	Attempted bool
+	DateFrom string
+	DateTo   string
+	Problems []views.ImportProblem
+	RunID    *uuid.UUID
 }
 
 // renderReconciliation writes the page. The first visit, a refusal and the
@@ -202,7 +199,6 @@ func (s *Server) renderReconciliation(w http.ResponseWriter, r *http.Request, t 
 		DateFrom:   from,
 		DateTo:     to,
 		Problems:   in.Problems,
-		Attempted:  in.Attempted,
 		Run:        reconcileRunView(run),
 		Runs:       reconcileRunRows(runs),
 	}))

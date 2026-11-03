@@ -101,7 +101,7 @@ func TestCashSaleFlowAndArchivedPDF(t *testing.T) {
 	if rec := c.get("/documents/new"); rec.Code != http.StatusOK {
 		t.Fatalf("GET /documents/new = %d:\n%s", rec.Code, rec.Body.String())
 	}
-	if rec := c.get("/documents"); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "No documents match") {
+	if rec := c.get("/documents"); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "No documents yet.") {
 		t.Fatalf("empty document list = %d:\n%s", rec.Code, rec.Body.String())
 	}
 
@@ -363,7 +363,7 @@ func TestDocumentValidationAndUnavailablePrinter(t *testing.T) {
 	}
 
 	// Nothing was issued by any of the rejected forms.
-	if body := c.get("/documents").Body.String(); !strings.Contains(body, "No documents match") {
+	if body := c.get("/documents").Body.String(); !strings.Contains(body, "No documents yet.") {
 		t.Fatalf("a rejected form created a document:\n%s", body)
 	}
 

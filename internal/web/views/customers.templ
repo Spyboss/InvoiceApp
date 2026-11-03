@@ -13,13 +13,14 @@ type CustomersData struct {
 	TenantName string
 	UserName   string
 	Nav        []NavLink
+	CSRFToken  string
 	Query      string
 	CanWrite   bool
 	Rows       []CustomerRow
 }
 
 templ Customers(d CustomersData) {
-	@Layout("Customers", d.TenantName, d.UserName, d.Nav, customersBody(d))
+	@Layout("Customers", d.TenantName, d.UserName, d.CSRFToken, d.Nav, customersBody(d))
 }
 
 templ customersBody(d CustomersData) {
@@ -27,7 +28,7 @@ templ customersBody(d CustomersData) {
 		<header>
 			<h1>Customers</h1>
 			<form method="get" action="/customers" class="search">
-				<input type="search" name="q" value={ d.Query } placeholder="Name, phone or NIC" aria-label="Search customers"/>
+				<input type="search" name="q" value={ d.Query } placeholder="Search customers" aria-label="Search customers"/>
 				<button type="submit" class="secondary">Search</button>
 			</form>
 		</header>
@@ -37,7 +38,11 @@ templ customersBody(d CustomersData) {
 		}
 
 		if len(d.Rows) == 0 {
-			<p class="muted">No customers match.</p>
+			if d.Query == "" {
+				<p class="muted">No customers yet.</p>
+			} else {
+				<p class="muted">No customer matches that search.</p>
+			}
 		} else {
 			<div class="table-scroll">
 				<table>
@@ -89,14 +94,12 @@ type CustomerFormData struct {
 }
 
 templ CustomerForm(d CustomerFormData) {
-	@Layout(d.Heading, d.TenantName, d.UserName, d.Nav, customerFormBody(d))
+	@Layout(d.Heading, d.TenantName, d.UserName, d.CSRFToken, d.Nav, customerFormBody(d))
 }
 
 templ customerFormBody(d CustomerFormData) {
 	<article class="wide">
-		<header>
-			<h1>{ d.Heading }</h1>
-		</header>
+		<h1>{ d.Heading }</h1>
 
 		if d.Error != "" {
 			<p role="alert">{ d.Error }</p>
@@ -161,7 +164,7 @@ type CustomerDetailData struct {
 }
 
 templ CustomerDetail(d CustomerDetailData) {
-	@Layout(d.Fields.Name, d.TenantName, d.UserName, d.Nav, customerDetailBody(d))
+	@Layout(d.Fields.Name, d.TenantName, d.UserName, d.CSRFToken, d.Nav, customerDetailBody(d))
 }
 
 templ customerDetailBody(d CustomerDetailData) {
@@ -203,12 +206,12 @@ templ customerDetailBody(d CustomerDetailData) {
 			if d.CanWrite {
 				<details>
 					<summary>Remove this customer</summary>
-					<p class="muted">The customer disappears from lists. The record and its history stay.</p>
+					<p class="muted">The history stays.</p>
 					<form method="post" action={ "/customers/" + d.ID + "/delete" }>
 						<input type="hidden" name="csrf_token" value={ d.CSRFToken }/>
 						<label>
 							Reason
-							<input type="text" name="reason" maxlength="200" placeholder="Duplicate entry, moved away, and so on"/>
+							<input type="text" name="reason" maxlength="200"/>
 						</label>
 						<button type="submit" class="secondary">Remove customer</button>
 					</form>

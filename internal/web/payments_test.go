@@ -96,7 +96,7 @@ func TestPaymentFlowAndDayEnd(t *testing.T) {
 	docID := createLeasingInvoiceHTTP(t, c, clock, "ZAPM0000005001", "1,000,000", "400,000")
 
 	page := c.get("/documents/" + docID).Body.String()
-	for _, want := range []string{"Take a payment", "Balance at issue", "600,000.00", "No money has been taken"} {
+	for _, want := range []string{"Take a payment", "Balance at issue", "600,000.00", "No receipts yet."} {
 		if !strings.Contains(page, want) {
 			t.Fatalf("invoice page missing %q:\n%s", want, page)
 		}
@@ -237,7 +237,7 @@ func TestOverpaymentIsRefusedWithACeiling(t *testing.T) {
 	}
 
 	// The refusal burnt no receipt number and wrote nothing.
-	if list := c.get("/payments").Body.String(); !strings.Contains(list, "No receipts match") {
+	if list := c.get("/payments").Body.String(); !strings.Contains(list, "No receipts yet.") {
 		t.Fatalf("a refused payment was written:\n%s", list)
 	}
 
@@ -368,9 +368,6 @@ func TestSalesClerkCannotTouchTheMoney(t *testing.T) {
 		t.Fatalf("sales report as a clerk = %d:\n%s", sales.Code, sales.Body.String())
 	}
 	body := sales.Body.String()
-	if !strings.Contains(body, "You see the invoices you issued") {
-		t.Fatalf("the report does not say it is scoped:\n%s", body)
-	}
 	if !strings.Contains(body, "800,000.00") {
 		t.Fatalf("the clerk's own invoice is missing from the report:\n%s", body)
 	}
@@ -387,10 +384,10 @@ func TestSalesClerkCannotTouchTheMoney(t *testing.T) {
 	}
 
 	// The yard report hides what the dealership paid from a clerk.
-	if strings.Contains(clerk.get("/reports/stock").Body.String(), "Capital in the yard") {
+	if strings.Contains(clerk.get("/reports/stock").Body.String(), "Capital at cost") {
 		t.Fatal("a clerk sees the cost of the yard")
 	}
-	if !strings.Contains(owner.get("/reports/stock").Body.String(), "Capital in the yard") {
+	if !strings.Contains(owner.get("/reports/stock").Body.String(), "Capital at cost") {
 		t.Fatal("the owner cannot see the cost of the yard")
 	}
 }
@@ -478,7 +475,7 @@ func TestReceiptsAndDayEndAreInvisibleToOtherTenants(t *testing.T) {
 	if got := other.get("/payments/" + receiptID); got.Code != http.StatusNotFound {
 		t.Fatalf("beta read alpha's receipt = %d, want 404", got.Code)
 	}
-	if got := other.get("/payments"); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), "No receipts match") {
+	if got := other.get("/payments"); got.Code != http.StatusOK || !strings.Contains(got.Body.String(), "No receipts yet.") {
 		t.Fatalf("beta payments list:\n%s", got.Body.String())
 	}
 	dayEnd := other.get("/day-end")

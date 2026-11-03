@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -43,9 +42,8 @@ func (s *Server) importPage() http.HandlerFunc {
 		}
 
 		s.renderImport(w, r, t, u, http.StatusOK, importPageInput{
-			Fields:    views.ImportFields{StockDate: dateValue(businessToday(s.now()))},
-			RunID:     runID,
-			Attempted: runID != nil,
+			Fields: views.ImportFields{StockDate: dateValue(businessToday(s.now()))},
+			RunID:  runID,
 		})
 	}
 }
@@ -70,7 +68,7 @@ func (s *Server) importInvoicesSubmit() http.HandlerFunc {
 		file, problem := readUpload(r, "file")
 		if problem != "" {
 			s.renderImport(w, r, t, u, http.StatusBadRequest, importPageInput{
-				Fields: fields, Problems: []views.ImportProblem{{Detail: problem}}, Attempted: true,
+				Fields: fields, Problems: []views.ImportProblem{{Detail: problem}},
 			})
 			return
 		}
@@ -79,7 +77,7 @@ func (s *Server) importInvoicesSubmit() http.HandlerFunc {
 		if err != nil {
 			// Not this file at all: the parser's own sentence is the answer.
 			s.renderImport(w, r, t, u, http.StatusBadRequest, importPageInput{
-				Fields: fields, Problems: []views.ImportProblem{{Detail: err.Error()}}, Attempted: true,
+				Fields: fields, Problems: []views.ImportProblem{{Detail: err.Error()}},
 			})
 			return
 		}
@@ -113,7 +111,7 @@ func (s *Server) importInvoicesSubmit() http.HandlerFunc {
 		if err != nil {
 			if refused := refusedProblems(err); refused != nil {
 				s.renderImport(w, r, t, u, http.StatusBadRequest, importPageInput{
-					Fields: fields, Problems: refused, Attempted: true,
+					Fields: fields, Problems: refused,
 				})
 				return
 			}
@@ -146,9 +144,8 @@ func (s *Server) importStockSubmit() http.HandlerFunc {
 			at, err := time.Parse("2006-01-02", fields.StockDate)
 			if err != nil {
 				s.renderImport(w, r, t, u, http.StatusBadRequest, importPageInput{
-					Fields:    fields,
-					Problems:  []views.ImportProblem{{Detail: "the day to date undated units from is not a date: use 2026-10-30"}},
-					Attempted: true,
+					Fields:   fields,
+					Problems: []views.ImportProblem{{Detail: "the day to date undated units from is not a date: use 2026-10-30"}},
 				})
 				return
 			}
@@ -159,7 +156,7 @@ func (s *Server) importStockSubmit() http.HandlerFunc {
 		file, problem := readUpload(r, "file")
 		if problem != "" {
 			s.renderImport(w, r, t, u, http.StatusBadRequest, importPageInput{
-				Fields: fields, Problems: []views.ImportProblem{{Detail: problem}}, Attempted: true,
+				Fields: fields, Problems: []views.ImportProblem{{Detail: problem}},
 			})
 			return
 		}
@@ -167,7 +164,7 @@ func (s *Server) importStockSubmit() http.HandlerFunc {
 		parsed, err := legacy.ParseStock(bytes.NewReader(file.Data))
 		if err != nil {
 			s.renderImport(w, r, t, u, http.StatusBadRequest, importPageInput{
-				Fields: fields, Problems: []views.ImportProblem{{Detail: err.Error()}}, Attempted: true,
+				Fields: fields, Problems: []views.ImportProblem{{Detail: err.Error()}},
 			})
 			return
 		}
@@ -203,7 +200,7 @@ func (s *Server) importStockSubmit() http.HandlerFunc {
 		if err != nil {
 			if refused := refusedProblems(err); refused != nil {
 				s.renderImport(w, r, t, u, http.StatusBadRequest, importPageInput{
-					Fields: fields, Problems: refused, Attempted: true,
+					Fields: fields, Problems: refused,
 				})
 				return
 			}
@@ -227,10 +224,9 @@ func (s *Server) importTemplate() http.HandlerFunc {
 // importPageInput is everything a render of the import page can vary: what the
 // person typed, why the file was refused, and which run to show.
 type importPageInput struct {
-	Fields    views.ImportFields
-	Problems  []views.ImportProblem
-	RunID     *uuid.UUID
-	Attempted bool
+	Fields   views.ImportFields
+	Problems []views.ImportProblem
+	RunID    *uuid.UUID
 }
 
 // renderImport writes the import page. The first visit, a refusal and the
@@ -267,12 +263,6 @@ func (s *Server) renderImport(w http.ResponseWriter, r *http.Request, t store.Te
 		return
 	}
 
-	notice := ""
-	if in.Attempted && len(in.Problems) == 0 && run != nil {
-		notice = fmt.Sprintf("Imported %s: %d rows written and %d already in the book.",
-			store.ImportKindLabel(run.Kind), run.RowsImported, run.RowsSkipped)
-	}
-
 	s.render(w, r, status, views.Import(views.ImportData{
 		TenantName: t.Name,
 		UserName:   u.User.Name,
@@ -280,8 +270,6 @@ func (s *Server) renderImport(w http.ResponseWriter, r *http.Request, t store.Te
 		CSRFToken:  csrfToken(r.Context()),
 		Fields:     in.Fields,
 		Problems:   in.Problems,
-		Attempted:  in.Attempted,
-		Notice:     notice,
 		Run:        importRunView(run),
 		Runs:       importRunRows(runs),
 	}))
@@ -372,13 +360,14 @@ func refusedProblems(err error) []views.ImportProblem {
 	return out
 }
 
-// importRunView describes a recorded run, both sides of its arithmetic. The
-// database refuses a run whose two sides differ, so the page reading them back
-// is the acceptance test of this step in a person's own words.
+// importRunView describes a recorded run as facts and one row of totals. The
+// database refuses a run whose two sides differ, so the stored side is the side
+// worth showing: it is what this book holds under the same numbers.
 func importRunView(run *store.ImportRunDetail) *views.ImportRunView {
 	if run == nil {
 		return nil
 	}
+	head, row := importTotals(run.Kind, run.Stored)
 	return &views.ImportRunView{
 		Kind:      run.Kind,
 		KindLabel: store.ImportKindLabel(run.Kind),
@@ -388,9 +377,8 @@ func importRunView(run *store.ImportRunDetail) *views.ImportRunView {
 		At:        run.CreatedAt,
 		Imported:  run.RowsImported,
 		Skipped:   run.RowsSkipped,
-		FileSays:  importNumbers(run.Kind, run.Source),
-		AppHolds:  importNumbers(run.Kind, run.Stored),
-		Balanced:  run.Source == run.Stored,
+		Head:      head,
+		Row:       row,
 	}
 }
 
@@ -411,16 +399,16 @@ func importRunRows(runs []store.ImportRun) []views.ImportRunRow {
 	return rows
 }
 
-// importNumbers says one side of a run in the words the file's own kind uses:
-// papers with a price, a deposit and a balance for the invoices file, units with
-// a cost and an asking price for the yard sheet.
-func importNumbers(kind string, n store.ImportNumbers) string {
+// importTotals is a run's totals as a table a person reads without a sentence:
+// papers with a price, a deposit and a balance for the invoices file, units
+// with a cost and an asking price for the yard sheet.
+func importTotals(kind string, n store.ImportNumbers) (head, row []string) {
 	if kind == store.ImportStock {
-		return fmt.Sprintf("%d units, cost %s, asking %s",
-			n.Count, money.Format(n.CostCents), money.Format(n.ValueCents))
+		return []string{"Units", "Cost (Rs)", "Asking (Rs)"},
+			[]string{strconv.Itoa(n.Count), money.Format(n.CostCents), money.Format(n.ValueCents)}
 	}
-	return fmt.Sprintf("%d papers worth %s, %s paid, %s owing",
-		n.Count, money.Format(n.ValueCents), money.Format(n.DownCents), money.Format(n.BalanceCents))
+	return []string{"Papers", "Price (Rs)", "Paid (Rs)", "Owing (Rs)"},
+		[]string{strconv.Itoa(n.Count), money.Format(n.ValueCents), money.Format(n.DownCents), money.Format(n.BalanceCents)}
 }
 
 // shortHash is the first bytes of a file hash: enough for a person to recognise
