@@ -340,3 +340,23 @@ rules:
 **why** the one thing worse than an uncached stylesheet is a cached one that disagrees with the html it is painting. revalidation is cheap, and it makes "restart the server, reload the page" true again instead of "restart the server, reload, and hope".
 
 **cost** one conditional request per page load instead of zero for five minutes. at this traffic that is nothing, and a 304 carries no body.
+
+## D26 - one sales series, and the IRD serial
+
+**date** 2026-11-13 – **status** accepted (supersedes the numbering format and the per-type series in D09 and D21)
+
+**context** two things were wrong with the numbers. first, cash and leasing were numbered from two counters while the customer reads "SALES INVOICE" on both, and the app this one replaces spent a single SALES number space for both. every read of the counters already had to pretend the pair was one series, and D23 recorded the cost of that pretence: a year of imported paper could hand out two papers in one year carrying the same number. second, the format was four digits with no year or month in it. Sri Lanka's Inland Revenue Department prescribes the serial a tax invoice carries: `YYMMM_QQQQ_XXXXX`, at most 40 characters, no spaces, continuous. changing that later means renumbering paper that is already on a customer's desk, so it is cheaper to print it from the first invoice.
+
+**decision**
+
+- one sales series. `SALES_CASH` and `SALES_LEASING` stay two document types, because a cash sale is paid in full and a leasing sale leaves a balance owed by a finance company, and the two read differently on the screen. they are numbered from one counter, `SALES`, through `SeriesFor`. `ValidSeries` refuses the two raw document types, so a caller that forgets `SeriesFor` is failed instead of quietly opening a second sales counter beside the real one.
+- the serial is `YYMMM_QQQQ_XXXXX`, built by `FormatSerial`: year and month of the paper itself, a four character branch segment, then a counter padded to five digits. the counter still runs per tenant, per series, per year, so the digits only go up; a backdated paper carries an earlier month than the one before it and is still unique.
+- the branch segment is the tenant's slug reduced to its first four alphanumerics, upper cased and zero padded. it is not a settings field: a dealership runs one counter, and the slug is fixed when the tenant is created (D18), so the number cannot disagree with the tenant it came from.
+- migration `0008` merges the two old sales counters into `SALES` at the higher of the pair for each year, then deletes the old rows. it loops tenants with `app.tenant_id` set, because `document_series` is force row level security and a bare delete from a migration would match nothing and report success.
+- a number already printed is never rewritten. papers issued before this entry keep the number the old app or the old format gave them; the serial applies from here.
+- `serialTail` is the single place that reads a counter out of a stored number, so both the gap scan and the import's lift work on `0041` and on `26NOV_TANG_00041`. a number that does not end in digits is skipped, not guessed at.
+- `numbering_gap.go` reads the sales series from the two document types it still covers, because `documents.doc_type` did not change.
+
+**why** the number is the identity of a sale, and it has to agree with the date printed beside it. one series makes the counter match what the customer sees and removes the merge that every read of the counters used to carry. the IRD shape costs nothing today and is expensive to adopt after the first paper goes out.
+
+**cost** the `doc_no` column carries two shapes for a while, the old short form on pre-existing papers and the serial on new ones, until the old ones stop mattering. the branch segment is derived rather than chosen, so a dealer who wants different four characters needs a settings field that does not exist yet. and the serial is necessary but not sufficient for a compliant tax invoice: the TIN of both parties, the place of supply, the mode of payment and the amount in words are separate work on the pdf templates, still not built, and still waiting on the accountant's answer about whether this business is over the VAT threshold at all.

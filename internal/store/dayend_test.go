@@ -3,6 +3,7 @@ package store_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -86,8 +87,8 @@ func TestCloseDayStoresTheVariance(t *testing.T) {
 		t.Fatalf("close: %v", err)
 	}
 
-	if end.ZNo != "0001" || end.ZYear != window.Date.Year() {
-		t.Fatalf("z number = %s/%d", end.ZNo, end.ZYear)
+	if !strings.HasSuffix(end.ZNo, "_00001") || end.ZYear != window.Date.Year() {
+		t.Fatalf("z number = %s/%d, want the first of the year", end.ZNo, end.ZYear)
 	}
 	if end.ExpectedCents != 30000000 {
 		t.Fatalf("expected = %d, want 30000000", end.ExpectedCents)
@@ -236,15 +237,34 @@ func TestClosedDayCannotBeChanged(t *testing.T) {
 		t.Fatal("app_rw deleted a closed day")
 	}
 
-	// The owner role could try, and the trigger stops it there too.
-	if _, err := admin.Exec(ctx, `update day_ends set counted_cents = 0 where id = $1`, end.ID); sqlStateOf(err) != "DAY01" {
-		t.Fatalf("owner update = %v (%s), want DAY01", err, sqlStateOf(err))
+	// The owner role could try, and the trigger stops it there too. The tenant
+	// has to be in scope for these: day_ends is force row level security, so
+	// without it the statement matches no row and succeeds against nothing,
+	// which would look like a refusal at the owner level when nothing was
+	// actually refused. Each attempt gets its own transaction because the
+	// first refusal aborts the one it runs in.
+	ownerAttempt := func(q string) string {
+		t.Helper()
+		tx, err := admin.Begin(ctx)
+		if err != nil {
+			t.Fatalf("begin: %v", err)
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+		if _, err := tx.Exec(ctx, `select set_config('app.tenant_id', $1, true)`, alpha.ID.String()); err != nil {
+			t.Fatalf("tenant: %v", err)
+		}
+		_, err = tx.Exec(ctx, q, end.ID)
+		return sqlStateOf(err)
 	}
-	if _, err := admin.Exec(ctx, `update day_end_lines set qty = 9 where day_end_id = $1`, end.ID); sqlStateOf(err) != "DAY01" {
-		t.Fatalf("owner line update = %v (%s), want DAY01", err, sqlStateOf(err))
+
+	if got := ownerAttempt(`update day_ends set counted_cents = 0 where id = $1`); got != "DAY01" {
+		t.Fatalf("owner update = %s, want DAY01", got)
 	}
-	if _, err := admin.Exec(ctx, `delete from day_ends where id = $1`, end.ID); sqlStateOf(err) != "DAY01" {
-		t.Fatalf("owner delete = %v (%s), want DAY01", err, sqlStateOf(err))
+	if got := ownerAttempt(`update day_end_lines set qty = 9 where day_end_id = $1`); got != "DAY01" {
+		t.Fatalf("owner line update = %s, want DAY01", got)
+	}
+	if got := ownerAttempt(`delete from day_ends where id = $1`); got != "DAY01" {
+		t.Fatalf("owner delete = %s, want DAY01", got)
 	}
 }
 
@@ -363,8 +383,8 @@ func TestDayEndIsInvisibleToOtherTenants(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if own.ZNo != "0001" {
-			t.Fatalf("beta z number = %s, want 0001", own.ZNo)
+		if !strings.HasSuffix(own.ZNo, "_00001") {
+			t.Fatalf("beta z number = %s, want the first of its own year", own.ZNo)
 		}
 		return nil
 	})

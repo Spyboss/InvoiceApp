@@ -123,7 +123,7 @@ func TestCashSaleFlowAndArchivedPDF(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET document = %d:\n%s", rec.Code, rec.Body.String())
 	}
-	for _, want := range []string{"Cash sale 0001", "Saman Perera", "1,250,000.00", "ISSUED", "Document issued"} {
+	for _, want := range []string{"Cash sale ", "_00001", "Saman Perera", "1,250,000.00", "ISSUED", "Document issued"} {
 		if !strings.Contains(rec.Body.String(), want) {
 			t.Errorf("document page missing %q", want)
 		}
@@ -156,8 +156,8 @@ func TestCashSaleFlowAndArchivedPDF(t *testing.T) {
 	if !strings.HasPrefix(rec.Body.String(), "%PDF") {
 		t.Fatal("pdf body does not look like a pdf")
 	}
-	if cd := rec.Header().Get("Content-Disposition"); !strings.Contains(cd, "sales_cash-0001.pdf") {
-		t.Errorf("content disposition = %q", cd)
+	if cd := rec.Header().Get("Content-Disposition"); !strings.Contains(cd, "sales_cash-") || !strings.Contains(cd, "_00001.pdf") {
+		t.Errorf("content disposition = %q, want the paper's serial", cd)
 	}
 	first := append([]byte(nil), rec.Body.Bytes()...)
 	rec = c.get("/documents/" + docID + "/pdf")
@@ -237,7 +237,9 @@ func TestQuotationConvertsAndSalesSeesOnlyOwn(t *testing.T) {
 		t.Fatalf("quotation page:\n%s", body)
 	}
 
-	if rec := owner.get("/documents/new?quote_id=" + quoteID); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "New invoice from quotation 0001") {
+	if rec := owner.get("/documents/new?quote_id=" + quoteID); rec.Code != http.StatusOK ||
+		!strings.Contains(rec.Body.String(), "New invoice from quotation ") ||
+		!strings.Contains(rec.Body.String(), "_00001") {
 		t.Fatalf("convert page = %d:\n%s", rec.Code, rec.Body.String())
 	}
 

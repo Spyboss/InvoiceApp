@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -769,46 +768,28 @@ func (s *Store) importedInvoiceTotals(ctx context.Context, tenantID uuid.UUID, p
 // handed out, so the first paper this app issues does not reuse a number that
 // is already on a customer's desk. It never lowers a counter.
 //
-// The two sales series are lifted together, to the higher of the two. They
-// print the same thing on paper ("SALES INVOICE No. 0007"), and the old app
-// spent one SALES number space for both, so lifting cash only to the highest
-// cash number would hand out a number a leasing invoice already carries.
+// Cash and leasing sales are numbered from one series, so a year of paper that
+// mixed both lifts a single counter to the highest number either kind printed.
+// That is what stops the next invoice from repeating a number a leasing sale
+// already carries.
 func (s *Store) raiseImportedSeries(ctx context.Context, tenantID uuid.UUID, papers []legacy.Paper) error {
 	type seriesKey struct {
-		docType string
-		year    int
+		series string
+		year   int
 	}
 	highest := make(map[seriesKey]int64, len(papers))
 	for _, p := range papers {
-		n, err := strconv.ParseInt(strings.TrimSpace(p.No), 10, 64)
-		if err != nil || n <= 0 {
+		n, ok := serialTail(p.No)
+		if !ok {
 			// A number that is not a number cannot lift a counter. It stays on
 			// the paper exactly as the old app wrote it, and the scan for gaps
 			// skips it the same way.
 			continue
 		}
-		k := seriesKey{docType: paperDocType(p), year: p.Date.Year()}
+		k := seriesKey{series: SeriesFor(paperDocType(p)), year: p.Date.Year()}
 		if n > highest[k] {
 			highest[k] = n
 		}
-	}
-	// A pair shares one space on paper, so both are lifted to the higher of
-	// the two, for every year the file has a sale in.
-	byYear := make(map[int]int64)
-	for k, n := range highest {
-		if k.docType == DocSalesCash || k.docType == DocSalesLease {
-			if n > byYear[k.year] {
-				byYear[k.year] = n
-			}
-		}
-	}
-	lift := make(map[seriesKey]int64, len(highest)+len(byYear))
-	for k, n := range highest {
-		lift[k] = n
-	}
-	for year, n := range byYear {
-		lift[seriesKey{docType: DocSalesCash, year: year}] = n
-		lift[seriesKey{docType: DocSalesLease, year: year}] = n
 	}
 
 	const q = `
@@ -816,9 +797,9 @@ func (s *Store) raiseImportedSeries(ctx context.Context, tenantID uuid.UUID, pap
 		values ($1, $2, $3, $4)
 		on conflict (tenant_id, doc_type, year) do update
 		set last_value = greatest(document_series.last_value, excluded.last_value), updated_at = now()`
-	for k, n := range lift {
-		if _, err := s.db.Exec(ctx, q, tenantID, k.docType, k.year, n); err != nil {
-			return fmt.Errorf("lift the %s series for %d: %w", k.docType, k.year, err)
+	for k, n := range highest {
+		if _, err := s.db.Exec(ctx, q, tenantID, k.series, k.year, n); err != nil {
+			return fmt.Errorf("lift the %s series for %d: %w", k.series, k.year, err)
 		}
 	}
 	return nil

@@ -263,7 +263,7 @@ func (s *Store) CloseDay(ctx context.Context, tenantID, closedBy uuid.UUID, p Da
 	expected := totals.ExpectedCash(p.OpeningFloatCents)
 	variance := p.CountedCents - expected
 
-	zNo, err := s.AllocateNo(ctx, tenantID, SeriesDayEnd, p.Window.Date.Year())
+	zNo, err := s.AllocateNo(ctx, tenantID, SeriesDayEnd, p.Window.Date)
 	if err != nil {
 		return DayEnd{}, err
 	}

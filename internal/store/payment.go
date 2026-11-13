@@ -137,7 +137,7 @@ func (s *Store) CreatePayment(ctx context.Context, tenantID, createdBy uuid.UUID
 		return Payment{}, ErrPaymentOverBalance
 	}
 
-	receiptNo, err := s.AllocateNo(ctx, tenantID, SeriesPayment, p.PaidOn.Year())
+	receiptNo, err := s.AllocateNo(ctx, tenantID, SeriesPayment, p.PaidOn)
 	if err != nil {
 		return Payment{}, err
 	}

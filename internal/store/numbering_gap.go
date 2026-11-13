@@ -3,8 +3,6 @@ package store
 import (
 	"context"
 	"fmt"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -107,11 +105,10 @@ func (s *Store) ScanNumberingGaps(ctx context.Context, tenantID uuid.UUID, year 
 // holds them depends on the series: documents carry the document types,
 // payments carry the receipts, day_ends carry the z reports.
 //
-// The two sales series are read together on purpose. The old app numbered cash
-// and leasing sales from one SALES counter, and importing a year of paper brings
-// those numbers in unchanged, so on paper both series spent from one space. A
-// number held by either is a number somebody really has in hand, and reporting
-// it as missing from the other series would be a false alarm on every sale.
+// The sales series covers two document types, and both are read: the counter
+// is one, so a number held by either is a number somebody really has in hand.
+// Reading only one of the two would report every paper of the other as a
+// missing number on the day end.
 func (s *Store) heldNumbers(ctx context.Context, tenantID uuid.UUID, series string, year int) (map[int64]bool, error) {
 	var (
 		q    string
@@ -124,7 +121,7 @@ func (s *Store) heldNumbers(ctx context.Context, tenantID uuid.UUID, series stri
 	case SeriesDayEnd:
 		q = `select z_no from day_ends where tenant_id = $1 and z_year = $2`
 		args = []any{tenantID, year}
-	case DocSalesCash, DocSalesLease:
+	case SeriesSales:
 		q = `select doc_no from documents
 			where tenant_id = $1 and doc_year = $2 and doc_type in ('SALES_CASH', 'SALES_LEASING')`
 		args = []any{tenantID, year}
@@ -145,8 +142,8 @@ func (s *Store) heldNumbers(ctx context.Context, tenantID uuid.UUID, series stri
 		if err := rows.Scan(&no); err != nil {
 			return nil, fmt.Errorf("read issued numbers: %w", err)
 		}
-		n, err := strconv.ParseInt(strings.TrimSpace(no), 10, 64)
-		if err != nil || n <= 0 {
+		n, ok := serialTail(no)
+		if !ok {
 			// A number that is not a number is worth knowing about, but it
 			// cannot be compared, so it is skipped rather than failing the
 			// whole scan. The import leaves such a number on the paper too.
@@ -192,6 +189,8 @@ func SeriesLabel(series string) string {
 		return "receipts"
 	case SeriesDayEnd:
 		return "z reports"
+	case SeriesSales:
+		return "sales"
 	case DocQuotation:
 		return "quotations"
 	case DocSalesCash:

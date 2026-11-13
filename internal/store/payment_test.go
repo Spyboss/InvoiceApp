@@ -3,6 +3,7 @@ package store_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -84,8 +85,8 @@ func TestPaymentCannotExceedTheOutstandingBalance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first payment: %v", err)
 	}
-	if first.ReceiptNo != "0001" || first.Status != store.PaymentPosted {
-		t.Fatalf("receipt = %s %s", first.ReceiptNo, first.Status)
+	if !strings.HasSuffix(first.ReceiptNo, "_00001") || first.Status != store.PaymentPosted {
+		t.Fatalf("receipt = %s %s, want the first of the year", first.ReceiptNo, first.Status)
 	}
 	if first.AmountCents != 25000000 || first.DocNo != doc.DocNo || first.CustomerName != "Saman Perera" {
 		t.Fatalf("receipt = %+v", first)
@@ -101,8 +102,8 @@ func TestPaymentCannotExceedTheOutstandingBalance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("settle: %v", err)
 	}
-	if second.ReceiptNo != "0002" {
-		t.Fatalf("settling receipt = %s, want 0002", second.ReceiptNo)
+	if !strings.HasSuffix(second.ReceiptNo, "_00002") {
+		t.Fatalf("settling receipt = %s, want the next number", second.ReceiptNo)
 	}
 
 	// Nothing left, so even one rupee is too much.
@@ -329,15 +330,15 @@ func TestReceiptsAreNumberedPerTenantAndYear(t *testing.T) {
 	if err != nil {
 		t.Fatalf("alpha first: %v", err)
 	}
-	if first.ReceiptNo != "0001" {
-		t.Fatalf("alpha first receipt = %s", first.ReceiptNo)
+	if !strings.HasSuffix(first.ReceiptNo, "_00001") {
+		t.Fatalf("alpha first receipt = %s, want the first of the year", first.ReceiptNo)
 	}
 	second, err := postPayment(t, st, alpha.ID, ownerAlpha.ID, cashPayment(alphaDoc.ID, 1000))
 	if err != nil {
 		t.Fatalf("alpha second: %v", err)
 	}
-	if second.ReceiptNo != "0002" {
-		t.Fatalf("alpha second receipt = %s", second.ReceiptNo)
+	if !strings.HasSuffix(second.ReceiptNo, "_00002") {
+		t.Fatalf("alpha second receipt = %s, want the next number", second.ReceiptNo)
 	}
 
 	// The receipt series is separate from the invoice series, and beta starts
@@ -346,8 +347,8 @@ func TestReceiptsAreNumberedPerTenantAndYear(t *testing.T) {
 	if err != nil {
 		t.Fatalf("beta first: %v", err)
 	}
-	if betaFirst.ReceiptNo != "0001" {
-		t.Fatalf("beta first receipt = %s", betaFirst.ReceiptNo)
+	if !strings.HasSuffix(betaFirst.ReceiptNo, "_00001") {
+		t.Fatalf("beta first receipt = %s, want the first of its own year", betaFirst.ReceiptNo)
 	}
 	if betaFirst.DocNo != betaDoc.DocNo {
 		t.Fatalf("beta receipt points at %s", betaFirst.DocNo)
@@ -450,10 +451,10 @@ func TestMoneyCannotBeDatedOnAClosedDay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("payment on the next day: %v", err)
 	}
-	if early.ReceiptNo != "0001" {
-		t.Fatalf("yesterday's receipt = %q, want 0001", early.ReceiptNo)
+	if !strings.HasSuffix(early.ReceiptNo, "_00001") {
+		t.Fatalf("yesterday's receipt = %q, want the first of the year", early.ReceiptNo)
 	}
-	if pay.ReceiptNo != "0002" {
-		t.Fatalf("receipt after two refusals = %q, want 0002", pay.ReceiptNo)
+	if !strings.HasSuffix(pay.ReceiptNo, "_00002") {
+		t.Fatalf("receipt after two refusals = %q, want the next number", pay.ReceiptNo)
 	}
 }

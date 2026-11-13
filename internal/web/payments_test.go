@@ -106,7 +106,7 @@ func TestPaymentFlowAndDayEnd(t *testing.T) {
 	if form.Code != http.StatusOK {
 		t.Fatalf("GET payment form = %d:\n%s", form.Code, form.Body.String())
 	}
-	for _, want := range []string{"Receipt for Leasing sale 0001", "600,000.00", "Saman Perera"} {
+	for _, want := range []string{"Receipt for Leasing sale ", "_00001", "600,000.00", "Saman Perera"} {
 		if !strings.Contains(form.Body.String(), want) {
 			t.Fatalf("payment form missing %q:\n%s", want, form.Body.String())
 		}
@@ -124,8 +124,12 @@ func TestPaymentFlowAndDayEnd(t *testing.T) {
 	}
 	receiptID := idFromLocation(t, rec.Header().Get("Location"), "/payments/")
 
+	// Every series starts at its own one, so on this first day the first sale,
+	// the first receipt and the first z all read the same.
+	firstOfYear := store.FormatSerial(businessToday(clock.Now()), "ALPH", 1)
+
 	receipt := c.get("/payments/" + receiptID + "?created=1").Body.String()
-	for _, want := range []string{"Receipt 0001", "Receipt recorded", "250,000.00", "Cash", "Saman Perera", "Leasing sale 0001"} {
+	for _, want := range []string{"Receipt " + firstOfYear, "Receipt recorded", "250,000.00", "Cash", "Saman Perera", "Leasing sale " + firstOfYear} {
 		if !strings.Contains(receipt, want) {
 			t.Fatalf("receipt page missing %q:\n%s", want, receipt)
 		}
@@ -166,7 +170,7 @@ func TestPaymentFlowAndDayEnd(t *testing.T) {
 	zID := idFromLocation(t, rec.Header().Get("Location"), "/day-end/")
 
 	z := c.get("/day-end/" + zID + "?closed=1").Body.String()
-	for _, want := range []string{"Day end 0001", "Day closed and stored", "300,000.00", "295,000.00", "-5,000.00",
+	for _, want := range []string{"Day end " + firstOfYear, "Day closed and stored", "300,000.00", "295,000.00", "-5,000.00",
 		"short by Rs 5,000.00", "Payments taken", "Documents issued", "counted twice", "Test Owner"} {
 		if !strings.Contains(z, want) {
 			t.Fatalf("z page missing %q:\n%s", want, z)
@@ -178,7 +182,7 @@ func TestPaymentFlowAndDayEnd(t *testing.T) {
 	if strings.Contains(day, "Close the day") {
 		t.Fatalf("a closed day still offers the close form:\n%s", day)
 	}
-	if !strings.Contains(day, "Z 0001") {
+	if !strings.Contains(day, "Z "+firstOfYear) {
 		t.Fatalf("closed day screen does not show the z:\n%s", day)
 	}
 

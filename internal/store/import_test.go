@@ -250,25 +250,27 @@ func TestImportInvoicesBringsTheBookIn(t *testing.T) {
 	}
 
 	// The next paper this app issues continues above the paper already on a
-	// customer's desk. Cash and leasing share one printed number space, so
-	// both sit above the higher of the two imported numbers.
+	// customer's desk. Cash and leasing are one series, so the second paper
+	// carries on from the first rather than repeating its number.
 	var nextCash, nextLease string
 	err = st.InTenant(context.Background(), alpha.ID, func(q *store.Store) error {
 		var err error
-		if nextCash, err = q.AllocateNo(context.Background(), alpha.ID, store.DocSalesCash, 2026); err != nil {
+		if nextCash, err = q.AllocateNo(context.Background(), alpha.ID, store.SeriesFor(store.DocSalesCash), serialDay); err != nil {
 			return err
 		}
-		nextLease, err = q.AllocateNo(context.Background(), alpha.ID, store.DocSalesLease, 2026)
+		nextLease, err = q.AllocateNo(context.Background(), alpha.ID, store.SeriesFor(store.DocSalesLease), serialDay)
 		return err
 	})
 	if err != nil {
 		t.Fatalf("allocate after import: %v", err)
 	}
-	if nextCash != "0009" {
-		t.Errorf("next cash number = %q, want 0009 (above every imported number)", nextCash)
+	// The counter is the tail of a serial; the branch segment comes from the
+	// tenant's slug, which the shared helper keeps random.
+	if !strings.HasSuffix(nextCash, "_00009") {
+		t.Errorf("next cash number = %q, want it to end _00009 (above every imported number)", nextCash)
 	}
-	if nextLease != "0009" {
-		t.Errorf("next leasing number = %q, want 0009", nextLease)
+	if !strings.HasSuffix(nextLease, "_00010") {
+		t.Errorf("next leasing number = %q, want it to end _00010 (the same series)", nextLease)
 	}
 
 	runs, err := listImportRuns(t, st, alpha.ID)

@@ -183,7 +183,7 @@ func (s *Store) CreateDocument(ctx context.Context, tenantID, createdBy uuid.UUI
 		convertedQuote = p.QuoteID
 	}
 
-	docNo, err := s.AllocateNo(ctx, tenantID, p.DocType, p.DocDate.Year())
+	docNo, err := s.AllocateNo(ctx, tenantID, SeriesFor(p.DocType), p.DocDate)
 	if err != nil {
 		return DocumentResult{}, err
 	}

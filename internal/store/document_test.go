@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 
@@ -84,8 +85,8 @@ func TestCashSaleSellsTheUnit(t *testing.T) {
 	}
 
 	d := res.Document
-	if d.DocNo != "0001" || d.Status != store.DocIssued {
-		t.Fatalf("document = %s %s", d.DocNo, d.Status)
+	if !strings.HasSuffix(d.DocNo, "_00001") || d.Status != store.DocIssued {
+		t.Fatalf("document = %s %s, want the first sales number", d.DocNo, d.Status)
 	}
 	if d.PriceCents != 125000000 || d.DownCents != 125000000 || d.BalanceCents != 0 {
 		t.Fatalf("cash money = price %d down %d balance %d", d.PriceCents, d.DownCents, d.BalanceCents)
@@ -174,8 +175,8 @@ func TestLeasingSaleAndAdvanceReceipt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("advance: %v", err)
 	}
-	if res.Document.DocNo != "0001" {
-		t.Fatalf("advance number = %q, want 0001 in its own series", res.Document.DocNo)
+	if !strings.HasSuffix(res.Document.DocNo, "_00001") {
+		t.Fatalf("advance number = %q, want the first of its own series", res.Document.DocNo)
 	}
 	if res.VehicleAfter != store.StatusReserved || res.StockMoved {
 		t.Fatalf("advance result = %+v", res)

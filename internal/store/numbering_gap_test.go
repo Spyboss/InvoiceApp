@@ -145,7 +145,7 @@ func TestNumberingGapIsFoundAndAlerted(t *testing.T) {
 	for i, v := range []store.Vehicle{v1, v2, v3} {
 		if i == 1 {
 			// Spend a number with no paper behind it: 0002 goes missing.
-			if err := bumpSeries(t, alpha.ID, store.DocSalesCash, year); err != nil {
+			if err := bumpSeries(t, alpha.ID, store.SeriesSales, year); err != nil {
 				t.Fatalf("bump series: %v", err)
 			}
 		}
@@ -177,8 +177,8 @@ func TestNumberingGapIsFoundAndAlerted(t *testing.T) {
 		t.Fatalf("gaps = %+v, want exactly one", gaps)
 	}
 	g := gaps[0]
-	if g.Series != store.DocSalesCash || g.Year != year {
-		t.Errorf("gap = %+v, want the cash invoice series for this year", g)
+	if g.Series != store.SeriesSales || g.Year != year {
+		t.Errorf("gap = %+v, want the sales series for this year", g)
 	}
 	if g.FirstMissing != 2 {
 		t.Errorf("first missing = %d, want 2", g.FirstMissing)
@@ -205,7 +205,7 @@ func TestNumberingGapIsFoundAndAlerted(t *testing.T) {
 	if !strings.Contains(alerts[0].Message, "0002") {
 		t.Errorf("message %q missing the missing number 0002", alerts[0].Message)
 	}
-	if !strings.Contains(alerts[0].Message, "cash invoices") {
+	if !strings.Contains(alerts[0].Message, "sales") {
 		t.Errorf("message %q does not name the series in words", alerts[0].Message)
 	}
 	if alerts[0].Severity != store.SeverityCritical {

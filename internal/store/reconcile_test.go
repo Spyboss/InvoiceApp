@@ -377,10 +377,13 @@ func TestNumberingGapsUnderstandImportedNumbers(t *testing.T) {
 	})
 
 	gaps = scanGaps(t, st, alpha.ID, 2026)
-	if len(gaps) != 2 {
-		t.Fatalf("gaps = %+v, want one row for each sales series", gaps)
+	if len(gaps) != 1 {
+		t.Fatalf("gaps = %+v, want one row for the sales series", gaps)
 	}
 	for _, gap := range gaps {
+		if gap.Series != store.SeriesSales {
+			t.Errorf("gap names series %s, want %s", gap.Series, store.SeriesSales)
+		}
 		if gap.FirstMissing != 4 || gap.Missing != 2 || gap.Expected != 6 || gap.Issued != 4 {
 			t.Errorf("%s: expected %d issued %d first missing %d missing %d, want 6/4/4/2",
 				gap.Series, gap.Expected, gap.Issued, gap.FirstMissing, gap.Missing)

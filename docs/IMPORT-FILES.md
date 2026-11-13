@@ -74,7 +74,7 @@ a unit that has already left the yard cannot leave twice, so re-sending a sold u
 
 ### numbers after the import
 
-imported papers keep the number the old app gave them. afterwards the app's own counters are lifted above the highest imported number for that year, so the next paper continues the paper book instead of colliding with it. the two sales series split one legacy series, so they are lifted together to the higher of the pair.
+imported papers keep the number the old app gave them. afterwards the app's own counters are lifted above the highest imported number for that year, so the next paper continues the paper book instead of colliding with it. cash and leasing sales are one series (D26), so a file that mixes both lifts that single counter to the highest number either kind printed.
 
 ## the stock sheet
 
