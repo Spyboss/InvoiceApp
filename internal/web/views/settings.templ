@@ -10,7 +10,11 @@ type SettingsData struct {
 	Phone         string
 	Email         string
 	VATNumber     string
-	DiscountLimit string
+	SeriesPrefix  string
+	// EffectivePrefix is what a blank prefix prints today, so the box can say
+	// what leaving it empty means instead of describing the rule in advance.
+	EffectivePrefix string
+	DiscountLimit   string
 	VarianceAlert string
 	BackdateDays  string
 	AlertEmail    string
@@ -43,6 +47,8 @@ templ settingsBody(d SettingsData) {
 				<dd>{ orDash(d.Email) }</dd>
 				<dt>VAT number</dt>
 				<dd>{ orDash(d.VATNumber) }</dd>
+				<dt>Invoice prefix</dt>
+				<dd>{ d.EffectivePrefix }</dd>
 			</dl>
 		} else {
 			<form method="post" action="/settings" class="narrow">
@@ -71,6 +77,11 @@ templ settingsBody(d SettingsData) {
 				<label>
 					VAT number
 					<input type="text" name="vat_number" value={ d.VATNumber } maxlength="40"/>
+				</label>
+
+				<label>
+					Invoice prefix (4 characters, blank uses { d.EffectivePrefix })
+					<input type="text" name="series_prefix" value={ d.SeriesPrefix } maxlength="4" pattern="[A-Z0-9]{4}"/>
 				</label>
 
 				<fieldset>

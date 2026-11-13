@@ -181,6 +181,57 @@ func TestDocumentNumberRollsBackWithTheDocument(t *testing.T) {
 	}
 }
 
+// TestChosenPrefixIsPrintedOnTheSerial is D27: the four characters on the
+// paper are the owner's, not the hostname's, and the counter is not disturbed
+// by changing them.
+func TestChosenPrefixIsPrintedOnTheSerial(t *testing.T) {
+	st := freshStore(t)
+	alpha := newSluggedTenant(t, st, "alpha-motors", "Alpha Motors", "alpha.test")
+	owner := newUser(t, st, alpha.ID, "owner@alpha.test", store.RoleOwner)
+	ctx := context.Background()
+
+	save := func(prefix string) {
+		t.Helper()
+		err := st.InTenant(ctx, alpha.ID, func(q *store.Store) error {
+			_, err := q.SaveSettings(ctx, alpha.ID, owner.ID, store.SettingsParams{SeriesPrefix: prefix})
+			return err
+		})
+		if err != nil {
+			t.Fatalf("save prefix %q: %v", prefix, err)
+		}
+	}
+	allocate := func() string {
+		t.Helper()
+		var no string
+		err := st.InTenant(ctx, alpha.ID, func(q *store.Store) error {
+			var err error
+			no, err = q.AllocateNo(ctx, alpha.ID, store.SeriesSales, serialDay)
+			return err
+		})
+		if err != nil {
+			t.Fatalf("allocate: %v", err)
+		}
+		return no
+	}
+
+	// Before the owner chooses, the slug supplies the code.
+	if got, want := allocate(), store.FormatSerial(serialDay, "ALPH", 1); got != want {
+		t.Fatalf("serial = %q, want %q", got, want)
+	}
+
+	save("tm01")
+	if got, want := allocate(), store.FormatSerial(serialDay, "TM01", 2); got != want {
+		t.Fatalf("serial with the owner's prefix = %q, want %q", got, want)
+	}
+
+	// Clearing it hands the code back to the slug. The counter was never
+	// touched, so the next paper still carries 3.
+	save("")
+	if got, want := allocate(), store.FormatSerial(serialDay, "ALPH", 3); got != want {
+		t.Fatalf("serial after clearing the prefix = %q, want %q", got, want)
+	}
+}
+
 func TestDocumentSeriesAreSeparatePerTypeYearAndTenant(t *testing.T) {
 	st := freshStore(t)
 	alpha := newSluggedTenant(t, st, "alpha-motors", "Alpha Motors", "alpha.test")

@@ -18,11 +18,12 @@ import (
 type Settings struct {
 	TenantID uuid.UUID
 
-	CompanyName string
-	Address     string
-	Phone       string
-	Email       string
-	VATNumber   string
+	CompanyName  string
+	Address      string
+	Phone        string
+	Email        string
+	VATNumber    string
+	SeriesPrefix string
 
 	DiscountLimitPercent int
 	VarianceAlertCents   int64
@@ -38,11 +39,12 @@ type Settings struct {
 // SettingsParams is what the owner typed. Every field is stored as given, so a
 // blank means "not set", never "leave as it was".
 type SettingsParams struct {
-	CompanyName string
-	Address     string
-	Phone       string
-	Email       string
-	VATNumber   string
+	CompanyName  string
+	Address      string
+	Phone        string
+	Email        string
+	VATNumber    string
+	SeriesPrefix string
 
 	DiscountLimitPercent int
 	VarianceAlertCents   int64
@@ -52,7 +54,7 @@ type SettingsParams struct {
 	AlertTelegramChat string
 }
 
-const settingsColumns = `tenant_id, company_name, address, phone, email, vat_number,
+const settingsColumns = `tenant_id, company_name, address, phone, email, vat_number, series_prefix,
 	discount_limit_percent, variance_alert_cents, backdate_days,
 	alert_email, alert_telegram_chat, updated_by, updated_at`
 
@@ -63,8 +65,8 @@ func (s *Store) SettingsFor(ctx context.Context, tenantID uuid.UUID) (Settings, 
 
 	var v Settings
 	err := s.db.QueryRow(ctx, q, tenantID).Scan(&v.TenantID, &v.CompanyName, &v.Address, &v.Phone,
-		&v.Email, &v.VATNumber, &v.DiscountLimitPercent, &v.VarianceAlertCents, &v.BackdateDays,
-		&v.AlertEmail, &v.AlertTelegramChat, &v.UpdatedBy, &v.UpdatedAt)
+		&v.Email, &v.VATNumber, &v.SeriesPrefix, &v.DiscountLimitPercent, &v.VarianceAlertCents,
+		&v.BackdateDays, &v.AlertEmail, &v.AlertTelegramChat, &v.UpdatedBy, &v.UpdatedAt)
 	if err != nil {
 		if notFound(err) == ErrNotFound {
 			return Settings{TenantID: tenantID}, nil
@@ -83,6 +85,7 @@ func (s *Store) SaveSettings(ctx context.Context, tenantID uuid.UUID, updatedBy 
 	p.Phone = strings.TrimSpace(p.Phone)
 	p.Email = strings.ToLower(strings.TrimSpace(p.Email))
 	p.VATNumber = strings.TrimSpace(p.VATNumber)
+	p.SeriesPrefix = strings.ToUpper(strings.TrimSpace(p.SeriesPrefix))
 	p.AlertEmail = strings.ToLower(strings.TrimSpace(p.AlertEmail))
 	p.AlertTelegramChat = strings.TrimSpace(p.AlertTelegramChat)
 
@@ -97,6 +100,8 @@ func (s *Store) SaveSettings(ctx context.Context, tenantID uuid.UUID, updatedBy 
 		return Settings{}, ErrInvalidSettings
 	case p.DiscountLimitPercent < 0 || p.DiscountLimitPercent > 100:
 		return Settings{}, ErrInvalidSettings
+	case !validSeriesPrefix(p.SeriesPrefix):
+		return Settings{}, ErrInvalidSettings
 	case p.BackdateDays < 0 || p.BackdateDays > 90:
 		return Settings{}, ErrInvalidSettings
 	case p.VarianceAlertCents < 0:
@@ -105,15 +110,16 @@ func (s *Store) SaveSettings(ctx context.Context, tenantID uuid.UUID, updatedBy 
 
 	const q = `
 		insert into tenant_settings (tenant_id, company_name, address, phone, email, vat_number,
-			discount_limit_percent, variance_alert_cents, backdate_days, alert_email,
+			series_prefix, discount_limit_percent, variance_alert_cents, backdate_days, alert_email,
 			alert_telegram_chat, updated_by)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		on conflict (tenant_id) do update set
 			company_name = excluded.company_name,
 			address = excluded.address,
 			phone = excluded.phone,
 			email = excluded.email,
 			vat_number = excluded.vat_number,
+			series_prefix = excluded.series_prefix,
 			discount_limit_percent = excluded.discount_limit_percent,
 			variance_alert_cents = excluded.variance_alert_cents,
 			backdate_days = excluded.backdate_days,
@@ -125,12 +131,31 @@ func (s *Store) SaveSettings(ctx context.Context, tenantID uuid.UUID, updatedBy 
 
 	var v Settings
 	if err := s.db.QueryRow(ctx, q, tenantID, p.CompanyName, p.Address, p.Phone, p.Email, p.VATNumber,
-		p.DiscountLimitPercent, p.VarianceAlertCents, p.BackdateDays, p.AlertEmail,
+		p.SeriesPrefix, p.DiscountLimitPercent, p.VarianceAlertCents, p.BackdateDays, p.AlertEmail,
 		p.AlertTelegramChat, updatedBy).
 		Scan(&v.TenantID, &v.CompanyName, &v.Address, &v.Phone, &v.Email, &v.VATNumber,
-			&v.DiscountLimitPercent, &v.VarianceAlertCents, &v.BackdateDays, &v.AlertEmail,
-			&v.AlertTelegramChat, &v.UpdatedBy, &v.UpdatedAt); err != nil {
+			&v.SeriesPrefix, &v.DiscountLimitPercent, &v.VarianceAlertCents, &v.BackdateDays,
+			&v.AlertEmail, &v.AlertTelegramChat, &v.UpdatedBy, &v.UpdatedAt); err != nil {
 		return Settings{}, fmt.Errorf("save settings: %w", err)
 	}
 	return v, nil
+}
+
+// validSeriesPrefix reports whether s is blank, meaning "derive it from the
+// slug", or exactly four upper case letters or digits. The width is what a
+// serial's branch segment takes and the alphabet is what survives being
+// printed and typed back in.
+func validSeriesPrefix(s string) bool {
+	if s == "" {
+		return true
+	}
+	if len(s) != 4 {
+		return false
+	}
+	for _, r := range s {
+		if (r < 'A' || r > 'Z') && (r < '0' || r > '9') {
+			return false
+		}
+	}
+	return true
 }

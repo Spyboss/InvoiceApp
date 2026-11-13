@@ -31,6 +31,7 @@ func TestSettings(t *testing.T) {
 		"phone":                  {"0112345678"},
 		"email":                  {"info@alpha.local"},
 		"vat_number":             {"123456789"},
+		"series_prefix":          {"tm01"},
 		"discount_limit_percent": {"15"},
 		"variance_alert_cents":   {"5000.50"},
 		"backdate_days":          {"3"},
@@ -47,7 +48,7 @@ func TestSettings(t *testing.T) {
 
 	// The settings are now on the page.
 	rec = c.get("/settings")
-	for _, want := range []string{"Alpha Motors Lanka", "15", "5000.50", "3", "alerts@alpha.local", "@alphamotors"} {
+	for _, want := range []string{"Alpha Motors Lanka", "15", "5000.50", "3", "alerts@alpha.local", "@alphamotors", "TM01"} {
 		if !strings.Contains(rec.Body.String(), want) {
 			t.Errorf("settings page missing %q:\n%s", want, rec.Body.String())
 		}

@@ -143,6 +143,28 @@ func branchCode(slug string) string {
 	return code
 }
 
+// seriesPrefixSQL is the four characters a serial carries as its branch
+// segment: the owner's own setting when they have chosen one, otherwise the
+// raw tenant slug, which branchCode reduces. It reads tenant_settings, which
+// is force row level security, so it only answers inside InTenant. $1 is the
+// tenant id.
+const seriesPrefixSQL = `coalesce(
+	nullif((select series_prefix from tenant_settings where tenant_id = $1), ''),
+	(select slug from tenants where id = $1)
+)`
+
+// EffectiveSeriesPrefix is what the next serial will actually carry, which is
+// the owner's four characters or the code derived from the slug when they have
+// not chosen one. The settings screen shows it beside the field, so nobody has
+// to read a printed serial to find out what is being printed.
+func (s *Store) EffectiveSeriesPrefix(ctx context.Context, tenantID uuid.UUID) (string, error) {
+	var raw string
+	if err := s.db.QueryRow(ctx, `select `+seriesPrefixSQL, tenantID).Scan(&raw); err != nil {
+		return "", fmt.Errorf("read series prefix: %w", err)
+	}
+	return branchCode(raw), nil
+}
+
 // AllocateNo bumps the series for (tenant, series, year) and returns the next
 // number, in the tenant's serial format. The upsert takes a row lock, so two
 // clerks issuing at the same moment get consecutive numbers, never the same
@@ -158,12 +180,12 @@ func (s *Store) AllocateNo(ctx context.Context, tenantID uuid.UUID, series strin
 		return "", ErrInvalidDocument
 	}
 
-	// The slug is read in the same statement, not before it: one round trip,
+	// The prefix is read in the same statement, not before it: one round trip,
 	// and the branch segment cannot come from a different tenant than the
 	// counter that was just bumped.
 	const q = `
 		with branch as (
-			select slug from tenants where id = $1
+			select ` + seriesPrefixSQL + ` as code
 		), bumped as (
 			insert into document_series (tenant_id, doc_type, year, last_value)
 			values ($1, $2, $3, 1)
@@ -171,14 +193,14 @@ func (s *Store) AllocateNo(ctx context.Context, tenantID uuid.UUID, series strin
 			set last_value = document_series.last_value + 1, updated_at = now()
 			returning last_value
 		)
-		select branch.slug, bumped.last_value from bumped, branch`
+		select branch.code, bumped.last_value from bumped, branch`
 
 	var (
-		slug string
-		n    int64
+		prefix string
+		n      int64
 	)
-	if err := s.db.QueryRow(ctx, q, tenantID, series, year).Scan(&slug, &n); err != nil {
+	if err := s.db.QueryRow(ctx, q, tenantID, series, year).Scan(&prefix, &n); err != nil {
 		return "", fmt.Errorf("allocate number: %w", err)
 	}
-	return FormatSerial(date, branchCode(slug), n), nil
+	return FormatSerial(date, branchCode(prefix), n), nil
 }

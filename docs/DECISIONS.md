@@ -360,3 +360,17 @@ rules:
 **why** the number is the identity of a sale, and it has to agree with the date printed beside it. one series makes the counter match what the customer sees and removes the merge that every read of the counters used to carry. the IRD shape costs nothing today and is expensive to adopt after the first paper goes out.
 
 **cost** the `doc_no` column carries two shapes for a while, the old short form on pre-existing papers and the serial on new ones, until the old ones stop mattering. the branch segment is derived rather than chosen, so a dealer who wants different four characters needs a settings field that does not exist yet. and the serial is necessary but not sufficient for a compliant tax invoice: the TIN of both parties, the place of supply, the mode of payment and the amount in words are separate work on the pdf templates, still not built, and still waiting on the accountant's answer about whether this business is over the VAT threshold at all.
+
+## D27 - the invoice prefix is the owner's to choose
+
+**date** 2026-11-13 – **status** accepted (refines D26)
+
+**context** D26 took the four character branch segment of a serial from the tenant's slug, so a number could never disagree with the tenant it came from and a new tenant printed something sensible before anyone opened a screen. but a slug is a hostname: it was chosen to be unique and short, not to read well on paper, and a dealership that wants `TM01` on its invoices cannot have it. the owner asked for it to be configurable.
+
+**decision** `tenant_settings.series_prefix`, edited on `/settings` beside the company details, validated as blank or exactly four upper case letters or digits. blank is not "keep the old one": it means "work it out from the slug again", which is what a tenant that never set it does, so the column needs no backfill and a mistake is undone by clearing the box. the label of the input prints what a blank box would produce, so the owner never has to read a printed serial to find out what is being printed.
+
+**why** the four characters appear on every paper the business issues for as long as that serial is in use, so they belong with the letterhead and not with the hostname. blank-means-derive keeps two things worth having: a fresh tenant is never broken, and there is always a way back.
+
+**cost** the prefix can now disagree with the tenant, and changing it part way through a year splits that year's serials across two prefixes. the counter is untouched, so no number repeats and none is skipped; what changes is the printed series, which an auditor will notice and a person will have to explain. paper already issued keeps the prefix it was printed with, so the record stays honest even though the series changes shape.
+
+**also recorded** the owner has confirmed the business is neither VAT registered nor advised by an accountant. the rest of the tax invoice field set (both parties' TIN, place of supply, mode of payment, amount in words) is therefore deliberately not built: printing tax fields the business has no registration to support would misrepresent the paper. the serial stays, because it costs nothing and registration is a turnover test he could cross later without warning, at which point the number is already in the shape the department asks for.

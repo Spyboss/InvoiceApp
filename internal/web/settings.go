@@ -20,9 +20,13 @@ func (s *Server) settingsPage() http.HandlerFunc {
 			return
 		}
 		var settings store.Settings
+		var effectivePrefix string
 		err := s.store.InTenant(r.Context(), t.ID, func(q *store.Store) error {
 			var innerErr error
-			settings, innerErr = q.SettingsFor(r.Context(), t.ID)
+			if settings, innerErr = q.SettingsFor(r.Context(), t.ID); innerErr != nil {
+				return innerErr
+			}
+			effectivePrefix, innerErr = q.EffectiveSeriesPrefix(r.Context(), t.ID)
 			return innerErr
 		})
 		if err != nil {
@@ -30,21 +34,23 @@ func (s *Server) settingsPage() http.HandlerFunc {
 			return
 		}
 		s.render(w, r, http.StatusOK, views.Settings(views.SettingsData{
-			TenantName:    t.Name,
-			UserName:      u.User.Name,
-			Nav:           navLinks(r.Context(), r.URL.Path),
-			CSRFToken:     csrfToken(r.Context()),
-			CompanyName:   settings.CompanyName,
-			Address:       settings.Address,
-			Phone:         settings.Phone,
-			Email:         settings.Email,
-			VATNumber:     settings.VATNumber,
-			DiscountLimit: strconv.Itoa(settings.DiscountLimitPercent),
-			VarianceAlert: money.Plain(settings.VarianceAlertCents),
-			BackdateDays:  strconv.Itoa(settings.BackdateDays),
-			AlertEmail:    settings.AlertEmail,
-			AlertTelegram: settings.AlertTelegramChat,
-			CanWrite:      auth.Can(r.Context(), "settings.write"),
+			TenantName:      t.Name,
+			UserName:        u.User.Name,
+			Nav:             navLinks(r.Context(), r.URL.Path),
+			CSRFToken:       csrfToken(r.Context()),
+			CompanyName:     settings.CompanyName,
+			Address:         settings.Address,
+			Phone:           settings.Phone,
+			Email:           settings.Email,
+			VATNumber:       settings.VATNumber,
+			SeriesPrefix:    settings.SeriesPrefix,
+			EffectivePrefix: effectivePrefix,
+			DiscountLimit:   strconv.Itoa(settings.DiscountLimitPercent),
+			VarianceAlert:   money.Plain(settings.VarianceAlertCents),
+			BackdateDays:    strconv.Itoa(settings.BackdateDays),
+			AlertEmail:      settings.AlertEmail,
+			AlertTelegram:   settings.AlertTelegramChat,
+			CanWrite:        auth.Can(r.Context(), "settings.write"),
 		}))
 	}
 }
@@ -57,26 +63,47 @@ func (s *Server) settingsSave() http.HandlerFunc {
 			return
 		}
 		fields := settingsFields(r)
+
+		// What a blank prefix prints today, read before anything is written.
+		// The screen redraws on a refusal and has to say what it said on the
+		// way in, or the owner cannot tell what leaving the box empty means.
+		var effectivePrefix string
+		err := s.store.InTenant(r.Context(), t.ID, func(q *store.Store) error {
+			var innerErr error
+			effectivePrefix, innerErr = q.EffectiveSeriesPrefix(r.Context(), t.ID)
+			return innerErr
+		})
+		if err != nil {
+			s.internalError(w, r, "settings", err)
+			return
+		}
+
+		// data is the screen as this attempt left it, so a refusal never blanks
+		// the rest of the form.
+		data := views.SettingsData{
+			TenantName:      t.Name,
+			UserName:        u.User.Name,
+			Nav:             navLinks(r.Context(), r.URL.Path),
+			CSRFToken:       csrfToken(r.Context()),
+			CompanyName:     fields.CompanyName,
+			Address:         fields.Address,
+			Phone:           fields.Phone,
+			Email:           fields.Email,
+			VATNumber:       fields.VATNumber,
+			SeriesPrefix:    fields.SeriesPrefix,
+			EffectivePrefix: effectivePrefix,
+			DiscountLimit:   fields.DiscountLimitPercent,
+			VarianceAlert:   fields.VarianceAlert,
+			BackdateDays:    fields.BackdateDays,
+			AlertEmail:      fields.AlertEmail,
+			AlertTelegram:   fields.AlertTelegramChat,
+			CanWrite:        auth.Can(r.Context(), "settings.write"),
+		}
+
 		discountLimit, err := parsePercent(fields.DiscountLimitPercent)
 		if err != nil {
-			s.render(w, r, http.StatusBadRequest, views.Settings(views.SettingsData{
-				TenantName:    t.Name,
-				UserName:      u.User.Name,
-				Nav:           navLinks(r.Context(), r.URL.Path),
-				CSRFToken:     csrfToken(r.Context()),
-				CompanyName:   fields.CompanyName,
-				Address:       fields.Address,
-				Phone:         fields.Phone,
-				Email:         fields.Email,
-				VATNumber:     fields.VATNumber,
-				DiscountLimit: fields.DiscountLimitPercent,
-				VarianceAlert: fields.VarianceAlert,
-				BackdateDays:  fields.BackdateDays,
-				AlertEmail:    fields.AlertEmail,
-				AlertTelegram: fields.AlertTelegramChat,
-				CanWrite:      auth.Can(r.Context(), "settings.write"),
-				Error:         "Discount percent must be 0-100.",
-			}))
+			data.Error = "Discount percent must be 0-100."
+			s.render(w, r, http.StatusBadRequest, views.Settings(data))
 			return
 		}
 		varianceAlert, verr := money.Parse(fields.VarianceAlert)
@@ -96,6 +123,7 @@ func (s *Server) settingsSave() http.HandlerFunc {
 				Phone:                fields.Phone,
 				Email:                fields.Email,
 				VATNumber:            fields.VATNumber,
+				SeriesPrefix:         fields.SeriesPrefix,
 				DiscountLimitPercent: discountLimit,
 				VarianceAlertCents:   varianceAlert,
 				BackdateDays:         backdateDays,
@@ -107,14 +135,8 @@ func (s *Server) settingsSave() http.HandlerFunc {
 		})
 		if err != nil || savedErr != nil {
 			if errors.Is(savedErr, store.ErrInvalidSettings) {
-				s.render(w, r, http.StatusBadRequest, views.Settings(views.SettingsData{
-					TenantName: t.Name,
-					UserName:   u.User.Name,
-					Nav:        navLinks(r.Context(), r.URL.Path),
-					CSRFToken:  csrfToken(r.Context()),
-					CanWrite:   auth.Can(r.Context(), "settings.write"),
-					Error:      "Check the discount percent (0-100), backdate days (0-90) and variance alert.",
-				}))
+				data.Error = "Check the discount percent (0-100), backdate days (0-90), variance alert and invoice prefix (4 letters or digits)."
+				s.render(w, r, http.StatusBadRequest, views.Settings(data))
 				return
 			}
 			s.internalError(w, r, "settings save", savedErr)
@@ -130,6 +152,7 @@ func settingsFields(r *http.Request) struct {
 	Phone                string
 	Email                string
 	VATNumber            string
+	SeriesPrefix         string
 	DiscountLimitPercent string
 	VarianceAlert        string
 	BackdateDays         string
@@ -142,6 +165,7 @@ func settingsFields(r *http.Request) struct {
 		Phone                string
 		Email                string
 		VATNumber            string
+		SeriesPrefix         string
 		DiscountLimitPercent string
 		VarianceAlert        string
 		BackdateDays         string
@@ -153,6 +177,7 @@ func settingsFields(r *http.Request) struct {
 		Phone:                strings.TrimSpace(r.PostFormValue("phone")),
 		Email:                strings.ToLower(strings.TrimSpace(r.PostFormValue("email"))),
 		VATNumber:            strings.TrimSpace(r.PostFormValue("vat_number")),
+		SeriesPrefix:         strings.ToUpper(strings.TrimSpace(r.PostFormValue("series_prefix"))),
 		DiscountLimitPercent: strings.TrimSpace(r.PostFormValue("discount_limit_percent")),
 		VarianceAlert:        strings.TrimSpace(r.PostFormValue("variance_alert_cents")),
 		BackdateDays:         strings.TrimSpace(r.PostFormValue("backdate_days")),
