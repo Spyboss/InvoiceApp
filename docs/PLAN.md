@@ -14,11 +14,18 @@ status: `todo` · `in progress` · `done` · `blocked`
 | 5 | payments + day end + reports | payment receipts, allocation, reversal, z report, sales/stock/receivables reports, csv export | overpayment rejected; day-end variance computed and stored; z report immutable after close | done |
 | 6 | settings + approvals + notifications | tenant settings screens, permission editor, audit viewer, approval pins, email + telegram alerts | a non-owner cannot reach settings (test); discount above floor requires approval; alerts fire on void/variance/gap | done |
 | 7 | import | csv import of existing invoices and stock, reconciliation against the file | imported totals match the csv source exactly, enforced by a check constraint; a repeat upload writes nothing; a file that does not add up is refused whole (the month of parallel running was dropped by D28) | done |
-| 8 | cutover | production domain, backups + restore drill, staff training doc | restore drill passes; staff issue a real invoice unaided on the production domain; owner signs off | in progress |
+| 8 | cutover | production domain, the nightly dump (`backup/`), restore drill, `docs/CUTOVER.md`, `docs/COUNTER.md` | restore drill passes; staff issue a real invoice unaided on the production domain; owner signs off | in progress |
 
 ## current step
 
-step 8 (cutover) is **in progress**. what remains: a production domain, a scheduled backup with a named owner, and a staff walkthrough. the parallel month that used to sit between steps 7 and 8 is dropped (D28): the owner deploys when the software is finished and tests on the live business, adjusting it as he goes.
+step 8 (cutover) is **in progress**. the software side is now the sequence to run rather than advice:
+
+- `docs/CUTOVER.md` is the order: the old app's dump first, an empty production database, the app with `APP_ENV=production`, `/setup` finished before the domain is public, the settings that print on paper, and a checklist that step 8 is signed off against.
+- `backup/` is a railway cron service that writes one dump a night to a volume on the other provider from the database, proves `pg_restore` can read it, and keeps 14 days (D29). the database itself keeps six hours of history on its current plan, which is why this exists.
+- `scripts/backup.sh` refuses an empty book and refuses a role that cannot bypass rls, because every table that holds the book forces it and such a role dumps a file that is not the book. both guards were found the hard way: the drill had quietly stopped working after the last tables were locked.
+- `docs/COUNTER.md` is the one page the counter gets: what each screen is for, in the order a day uses them.
+
+what remains is his to do and all of it is on the checklist: a neon project, a railway production environment, the domain, and one staff member issuing a real invoice unaided. the parallel month that used to sit between steps 7 and 8 is dropped (D28): the owner deploys when the software is finished and tests on the live business, adjusting it as he goes.
 
 step 7 is **done** on the software half, which is all D28 leaves it: imported totals match the csv source exactly, enforced by a constraint rather than by a comparison somebody has to remember to make.
 

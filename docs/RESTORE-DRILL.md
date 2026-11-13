@@ -4,6 +4,8 @@ step 8 is signed off on one thing above all: a backup that has been read back. t
 
 the script is `scripts/restore-drill.sh`. it is deliberately small and has no dependencies beyond `pg_dump`, `pg_restore` and `psql`.
 
+the connection to SOURCE has to be able to bypass row level security. the tables that hold the book force it, so `pg_dump` either reads every tenant's rows or fails trying, and a role that cannot get past a policy would otherwise be compared with an empty target and pass. on neon the owner role bypasses; on a local cluster it is `postgres`, whose password is not in this repository. the script asks this before it dumps and names the role it is running as.
+
 ## what it does
 
 ```
@@ -45,12 +47,12 @@ then the app itself was booted against the restored copy (`DATABASE_URL=…/invo
 ## what it cannot prove, and what to do by hand
 
 - **that the app can issue and print a paper.** boot against the target, issue one invoice, print it, void it. printing needs the gotenberg service; run this part on staging, not on a laptop.
-- **that the file still exists tomorrow.** the dump is deleted with its temporary directory when the drill ends, and retention is the platform's job. on neon that is the point-in-time-restore window; the question to answer before cutover is how long it is and who can open it.
-- **that the schedule ran.** the drill proves a dump restores; it does not prove one was taken tonight. the cutover checklist has to name where the daily dump goes and who checks it.
+- **that the file still exists tomorrow.** the dump is deleted with its temporary directory when the drill ends, and retention is the platform's job. the database keeps **six hours** of point-in-time restore on its current plan, which covers a mistake found the same day and nothing older; that is why the nightly dump in `backup/` exists and goes to a different provider.
+- **that the schedule ran.** the drill proves a dump restores; it does not prove one was taken tonight. `docs/CUTOVER.md` step 7 is where the daily dump is wired up, and the sign-off checklist is where somebody looks at one.
 
 ## before cutover
 
-1. run the drill against the production database as source, into a fresh database.
+1. run the drill against the production database as source, into a fresh database, as a role that bypasses rls.
 2. boot the current release against that fresh database and issue, print and void one invoice.
-3. confirm the point-in-time window and the daily dump both exist, and write down the retention period in `PLAN.md` step 8.
+3. confirm the dump the backup service wrote restores too, and that the six-hour window is understood for what it does not cover.
 4. keep the output of the run with the sign-off.

@@ -37,6 +37,16 @@ trap 'rm -rf "$workdir"' EXIT
 
 psql_at() { psql -X -q -A -t -v ON_ERROR_STOP=1 "$@"; }
 
+# The dump is taken by pg_dump, which reads past row level security or fails
+# trying. A role without that ability makes this drill either stop inside
+# pg_dump or compare an empty source with an empty target.
+role_state="$(psql_at -d "$source_dsn" -c "select rolsuper or rolbypassrls from pg_roles where rolname = current_user")"
+if [ "$role_state" != "t" ]; then
+	echo "the connection to SOURCE cannot bypass row level security, so it cannot dump the book" >&2
+	echo "use the database owner: neon's owner role bypasses rls; a local cluster needs postgres" >&2
+	exit 2
+fi
+
 # 1. The target has to be empty. An empty database still has the public schema,
 #    and nothing else.
 tables="$(psql_at -d "$target_dsn" -c "select count(*) from pg_tables where schemaname = 'public'")"
