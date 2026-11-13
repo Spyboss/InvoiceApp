@@ -55,8 +55,20 @@ func Filename(doc store.Document) string {
 	return strings.ToLower(doc.DocType) + "-" + doc.DocNo + ".pdf"
 }
 
+// Dealer is what the paper says about the business. It comes from the tenant's
+// settings screen, so the owner's own words are what a customer reads. A field
+// left blank falls back to the details the business printed before the screen
+// existed, so an install that has never been through settings still prints a
+// complete paper instead of a blank letterhead.
+type Dealer struct {
+	Name    string
+	Address string
+	Phones  string
+	VAT     string
+}
+
 // Render builds the html for the document and converts it with Gotenberg.
-func (r *Renderer) Render(ctx context.Context, tenantName string, doc store.Document) ([]byte, error) {
+func (r *Renderer) Render(ctx context.Context, dealer Dealer, doc store.Document) ([]byte, error) {
 	if r == nil || r.endpoint == "" {
 		return nil, ErrNotConfigured
 	}
@@ -65,7 +77,7 @@ func (r *Renderer) Render(ctx context.Context, tenantName string, doc store.Docu
 	if doc.DocType == store.DocProforma {
 		page = proformaHTML(doc)
 	} else {
-		page = dealerHTML(tenantName, doc)
+		page = dealerHTML(dealer, doc)
 	}
 	return r.toPDF(ctx, page)
 }

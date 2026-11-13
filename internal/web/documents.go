@@ -23,7 +23,23 @@ import (
 // PDFRenderer is the printing side of the app. It is an interface so the web
 // tests can print without a running Gotenberg.
 type PDFRenderer interface {
-	Render(ctx context.Context, tenantName string, doc store.Document) ([]byte, error)
+	Render(ctx context.Context, dealer pdf.Dealer, doc store.Document) ([]byte, error)
+}
+
+// dealerFrom is what the printed paper says about the business. The settings
+// screen is the source of it. The tenant's own name stands in when the owner
+// has not filled one in, because a paper with no name on it is not a paper.
+func dealerFrom(t store.Tenant, s store.Settings) pdf.Dealer {
+	name := strings.TrimSpace(s.CompanyName)
+	if name == "" {
+		name = t.Name
+	}
+	return pdf.Dealer{
+		Name:    name,
+		Address: s.Address,
+		Phones:  s.Phone,
+		VAT:     s.VATNumber,
+	}
 }
 
 // colombo is the business timezone. Dates on paper are Sri Lankan dates even
@@ -608,10 +624,18 @@ func (s *Server) documentPDF() http.HandlerFunc {
 
 		var d store.Document
 		var archived store.DocumentPDF
+		var settings store.Settings
 		var found bool
 		err := s.store.InTenant(r.Context(), t.ID, func(q *store.Store) error {
 			var err error
 			d, err = q.DocumentByID(r.Context(), t.ID, id)
+			if err != nil {
+				return err
+			}
+			// What the letterhead says comes from the settings screen, so it is
+			// read in the same round trip as the document rather than on a
+			// second one that could see a different answer.
+			settings, err = q.SettingsFor(r.Context(), t.ID)
 			if err != nil {
 				return err
 			}
@@ -642,7 +666,7 @@ func (s *Server) documentPDF() http.HandlerFunc {
 		}
 
 		if !found {
-			bytes, err := s.pdf.Render(r.Context(), t.Name, d)
+			bytes, err := s.pdf.Render(r.Context(), dealerFrom(t, settings), d)
 			if err != nil {
 				s.log.Error("pdf render failed",
 					"error", err,

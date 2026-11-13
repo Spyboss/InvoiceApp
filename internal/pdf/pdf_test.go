@@ -115,6 +115,46 @@ func TestProformaEscapesWhatPeopleType(t *testing.T) {
 	}
 }
 
+// The settings screen is where the owner writes the letterhead, so what it
+// holds is what a customer reads. Before this, those fields saved and the paper
+// printed constants, which is the worst of both: a screen that lies.
+func TestDealerPaperIsWhatTheSettingsSay(t *testing.T) {
+	base := sampleProforma()
+	base.DocType = store.DocSalesCash
+	base.FinanceCompany = ""
+
+	html := dealerHTML(Dealer{
+		Name:    "Gunawardana Enterprises",
+		Address: "12 Main Street, Tangalle",
+		Phones:  "077 000 0000",
+		VAT:     "124008026-7000",
+	}, base)
+
+	for _, want := range []string{
+		"Gunawardana Enterprises",
+		"12 Main Street, Tangalle",
+		"077 000 0000",
+		"VAT Reg. No. 124008026-7000",
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("letterhead is missing %q, so the settings screen did not reach the paper", want)
+		}
+	}
+}
+
+// A business that is not VAT registered should not have a number invented for
+// it. The line appears when the owner sets one and not before.
+func TestDealerPaperDoesNotInventAVATNumber(t *testing.T) {
+	base := sampleProforma()
+	base.DocType = store.DocSalesCash
+	base.FinanceCompany = ""
+
+	html := dealerHTML(Dealer{Name: "Gunawardana Enterprises"}, base)
+	if strings.Contains(html, "VAT Reg. No.") {
+		t.Error("the paper claims a VAT registration the settings do not hold")
+	}
+}
+
 func TestDealerDocuments(t *testing.T) {
 	base := sampleProforma()
 	base.DocType = store.DocSalesCash
@@ -125,7 +165,7 @@ func TestDealerDocuments(t *testing.T) {
 	base.BalanceCents = 0
 	base.FinanceCompany = ""
 
-	cash := dealerHTML("Gunawardana Enterprises", base)
+	cash := dealerHTML(Dealer{Name: "Gunawardana Enterprises"}, base)
 	for _, want := range []string{
 		"SALES INVOICE",
 		"No. 0042",
@@ -144,7 +184,7 @@ func TestDealerDocuments(t *testing.T) {
 	quote.DocType = store.DocQuotation
 	quote.DownCents = 0
 	quote.BalanceCents = 125000000
-	html := dealerHTML("Gunawardana Enterprises", quote)
+	html := dealerHTML(Dealer{Name: "Gunawardana Enterprises"}, quote)
 	if !strings.Contains(html, "QUOTATION") || !strings.Contains(html, "valid for 7 days") {
 		t.Error("quotation is not marked as a valid-for-7-days quote")
 	}
@@ -155,7 +195,7 @@ func TestDealerDocuments(t *testing.T) {
 	lease.BalanceCents = 100000000
 	lease.FinanceCompany = "SINGER FINANCE"
 	lease.FinanceAddress = "Colombo"
-	html = dealerHTML("Gunawardana Enterprises", lease)
+	html = dealerHTML(Dealer{Name: "Gunawardana Enterprises"}, lease)
 	for _, want := range []string{"SALES INVOICE", "SINGER FINANCE", "payable by the finance company", "Cash advance"} {
 		if !strings.Contains(html, want) {
 			t.Errorf("lease invoice missing %q", want)
@@ -166,7 +206,7 @@ func TestDealerDocuments(t *testing.T) {
 	advance.DocType = store.DocAdvance
 	advance.DownCents = 10000000
 	advance.BalanceCents = 115000000
-	html = dealerHTML("Gunawardana Enterprises", advance)
+	html = dealerHTML(Dealer{Name: "Gunawardana Enterprises"}, advance)
 	for _, want := range []string{"ADVANCE RECEIPT", "Advance received", "Received with thanks"} {
 		if !strings.Contains(html, want) {
 			t.Errorf("advance receipt missing %q", want)
@@ -176,7 +216,7 @@ func TestDealerDocuments(t *testing.T) {
 
 func TestRenderNeedsConfiguration(t *testing.T) {
 	r := New("", "", "")
-	if _, err := r.Render(context.Background(), "Alpha", sampleProforma()); !errors.Is(err, ErrNotConfigured) {
+	if _, err := r.Render(context.Background(), Dealer{Name: "Alpha"}, sampleProforma()); !errors.Is(err, ErrNotConfigured) {
 		t.Fatalf("render with no endpoint = %v, want ErrNotConfigured", err)
 	}
 }
@@ -215,7 +255,7 @@ func TestGotenbergClientSendsOneSelfContainedFile(t *testing.T) {
 	// Basic auth without a real username fails to build the header, so use a
 	// throwaway server with the credentials set.
 	r := New(srv.URL, "user", "secret")
-	out, err := r.Render(context.Background(), "Alpha", sampleProforma())
+	out, err := r.Render(context.Background(), Dealer{Name: "Alpha"}, sampleProforma())
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -240,7 +280,7 @@ func TestGotenbergClientRejectsFailures(t *testing.T) {
 	defer srv.Close()
 
 	r := New(srv.URL, "", "")
-	if _, err := r.Render(context.Background(), "Alpha", sampleProforma()); err == nil {
+	if _, err := r.Render(context.Background(), Dealer{Name: "Alpha"}, sampleProforma()); err == nil {
 		t.Fatal("render succeeded against a failing renderer")
 	}
 }

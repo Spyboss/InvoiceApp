@@ -11,26 +11,37 @@ import (
 	"time"
 
 	"github.com/spyboss/invoiceapp/internal/auth"
+	"github.com/spyboss/invoiceapp/internal/pdf"
 	"github.com/spyboss/invoiceapp/internal/store"
 )
 
 // fakePDF stands in for Gotenberg. The bytes are not a real pdf, but they
 // satisfy the archive's size and hash checks.
 type fakePDF struct {
-	mu    sync.Mutex
-	calls int
-	bytes []byte
+	mu     sync.Mutex
+	calls  int
+	bytes  []byte
+	dealer pdf.Dealer
 }
 
 func newFakePDF() *fakePDF {
 	return &fakePDF{bytes: append([]byte("%PDF-1.4\n"), bytes.Repeat([]byte("x"), 1200)...)}
 }
 
-func (f *fakePDF) Render(ctx context.Context, tenantName string, doc store.Document) ([]byte, error) {
+func (f *fakePDF) Render(ctx context.Context, dealer pdf.Dealer, doc store.Document) ([]byte, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls++
+	f.dealer = dealer
 	return f.bytes, nil
+}
+
+// Dealer is what the renderer was last asked to print on the letterhead, which
+// is how a test sees whether the settings screen reached the paper.
+func (f *fakePDF) Dealer() pdf.Dealer {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.dealer
 }
 
 func (f *fakePDF) Calls() int {
@@ -168,6 +179,12 @@ func TestCashSaleFlowAndArchivedPDF(t *testing.T) {
 		t.Fatalf("renderer called %d times, want 1", fake.Calls())
 	}
 
+	// A tenant that has never opened the settings screen still prints a name:
+	// its own, not a blank letterhead and not a constant.
+	if got := fake.Dealer().Name; got != "Alpha Motors" {
+		t.Errorf("letterhead name = %q, want the tenant name", got)
+	}
+
 	audit := c.get("/audit").Body.String()
 	for _, want := range []string{"document.create", "stock.sell", "document.pdf"} {
 		if !strings.Contains(audit, want) {
@@ -188,6 +205,61 @@ func TestCashSaleFlowAndArchivedPDF(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "no longer available") {
 		t.Fatalf("second sale body:\n%s", rec.Body.String())
+	}
+}
+
+// What the owner types on /settings is what the renderer is asked to print.
+// This is the seam the earlier version got wrong: the screen saved, and the
+// paper kept printing constants nobody could change.
+func TestPrintingUsesTheSettingsLetterhead(t *testing.T) {
+	fake := newFakePDF()
+	h, clock := newTestServerWithPDF(t, fake)
+	const password = "correct horse battery staple"
+	createTenantAndOwner(t, "Alpha Motors", "alpha.local", "owner@alpha.local", password)
+	c := signIn(t, h, "alpha.local", "owner@alpha.local", password)
+
+	rec := c.post("/settings", url.Values{
+		"csrf_token":             {c.csrfFrom(c.get("/settings"))},
+		"company_name":           {"Alpha Motors Lanka"},
+		"address":                {"12 Main Street, Tangalle"},
+		"phone":                  {"077 000 0000"},
+		"email":                  {"info@alpha.local"},
+		"vat_number":             {"124008026-7000"},
+		"series_prefix":          {"ALPH"},
+		"discount_limit_percent": {"10"},
+		"variance_alert_cents":   {"5000"},
+		"backdate_days":          {"2"},
+		"alert_email":            {""},
+		"alert_telegram_chat":    {""},
+	})
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("POST /settings = %d:\n%s", rec.Code, rec.Body.String())
+	}
+
+	customerID := createCustomerHTTP(t, c, "Saman Perera", "907654321V")
+	vehicleID := createVehicleHTTP(t, c, "ZAPM0000000002", "1,250,000")
+	form := documentForm(c, map[string]string{
+		"doc_type":    store.DocSalesCash,
+		"customer_id": customerID,
+		"vehicle_id":  vehicleID,
+		"price":       "1,250,000",
+		"down":        "1",
+	})
+	form.Set("doc_date", businessToday(clock.Now()).Format("2006-01-02"))
+	rec = c.post("/documents", form)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("POST /documents = %d:\n%s", rec.Code, rec.Body.String())
+	}
+	docID := idFromLocation(t, rec.Header().Get("Location"), "/documents/")
+
+	if rec := c.get("/documents/" + docID + "/pdf"); rec.Code != http.StatusOK {
+		t.Fatalf("GET pdf = %d:\n%s", rec.Code, rec.Body.String())
+	}
+
+	got := fake.Dealer()
+	if got.Name != "Alpha Motors Lanka" || got.Address != "12 Main Street, Tangalle" ||
+		got.Phones != "077 000 0000" || got.VAT != "124008026-7000" {
+		t.Errorf("letterhead = %+v, want what the settings screen holds", got)
 	}
 }
 

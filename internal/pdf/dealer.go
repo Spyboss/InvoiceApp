@@ -62,7 +62,7 @@ table.lines small { color: #444; font-size: 9pt; }
 <header class="top">
   <div>
     <div class="brand">{{.Tenant}}</div>
-    <div class="addr">{{.Address}}<br>{{.Phones}}<br>VAT Reg. No. {{.VAT}}</div>
+    <div class="addr">{{.Address}}<br>{{.Phones}}{{if .VAT}}<br>VAT Reg. No. {{.VAT}}{{end}}</div>
   </div>
   <div class="doc">
     <div class="title">{{.Title}}</div>
@@ -163,24 +163,30 @@ type dealerData struct {
 	IsLease         bool
 }
 
-// Business facts that will move to tenant settings in step 6. Until then they
-// are the details printed on every invoice today.
+// The address and phones the business printed on every invoice before the
+// settings screen existed. They are the fallback only: whatever the owner types
+// on /settings is what the paper says.
 const (
 	dealerAddress = "Beliatta Road, Tangalle, Sri Lanka"
 	dealerPhones  = "077 8318061 / 077 8525428"
-	dealerVAT     = proformaVATNo
 )
 
-func dealerHTML(tenantName string, d store.Document) string {
-	if strings.TrimSpace(tenantName) == "" {
-		tenantName = "Gunawardana Enterprises"
+func dealerHTML(dealer Dealer, d store.Document) string {
+	// A settings screen that has never been saved holds nothing, and a
+	// letterhead with a blank line where the address goes is worse than the
+	// details the shop actually uses.
+	if strings.TrimSpace(dealer.Address) == "" {
+		dealer.Address = dealerAddress
+	}
+	if strings.TrimSpace(dealer.Phones) == "" {
+		dealer.Phones = dealerPhones
 	}
 	data := dealerData{
 		FontCSS:         template.CSS(fontCSS()),
-		Tenant:          tenantName,
-		Address:         dealerAddress,
-		Phones:          dealerPhones,
-		VAT:             dealerVAT,
+		Tenant:          dealer.Name,
+		Address:         dealer.Address,
+		Phones:          dealer.Phones,
+		VAT:             dealer.VAT,
 		Title:           dealerTitle(d.DocType),
 		DocNo:           d.DocNo,
 		Date:            d.DocDate.Format("02/01/2006"),

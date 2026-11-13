@@ -400,3 +400,15 @@ rules:
 **cost** the dump is only as good as railway's disk, and a mistake older than 14 days has no copy. a cron that silently stops looks exactly like one that works, so the sign-off checklist names a dump to open by hand and the drill's output is kept with it. and the owner connection string is now a backup credential as well as a migration one: it must not leak, and it should not be the string on a developer's laptop.
 
 **found while building it** the dump failed with `query would be affected by row-level security policy for table "alerts"`, which is the guards doing their job. it also means the documented drill had quietly stopped working for anyone running it as a locally created owner, and that no local rehearsal is possible without the `postgres` password, which is not in the repository. both scripts now check the role first and say so in one sentence instead of failing inside `pg_dump`.
+
+## D30 - the letterhead is the settings screen, and the paper invents nothing
+
+**date** 2026-11-13 – **status** accepted
+
+**context** `/settings` collects the company name, address, phone and VAT number, and the dealer pdf ignored all four: it printed the constants in `internal/pdf/dealer.go`, including `VAT Reg. No. 124008026-7000`, which is the number on singer's proforma template. the live streamlit app prints no VAT number at all, and its dealer name reads "Gunawardhana Enterprises, Beliatta Road, Tangalle". the tenant row reads "Gunawardana Enterprises - Tangalle". so the new app would have stamped a registration number on a business that is not registered for VAT (D27), with a spelling of its own name that nobody chose.
+
+**decision** the letterhead is the tenant's settings. the name falls back to the tenant's own name, never to a constant. the address and phones fall back to the details the shop printed before the screen existed, because a blank letterhead is worse than a stale one. the VAT line is printed only when a number is set, so a business that is not registered prints none. the proforma is untouched: it is the leasing company's paper, its template places the number itself, and the geometry is pinned to their file.
+
+**why** a settings screen whose values do not reach the paper is a screen that lies, and the owner finds out at the printer with a customer waiting. the VAT number is the sharp edge: an invoice that claims a registration the business does not hold is a problem with the revenue department, not a cosmetic one.
+
+**cost** until `/settings` is saved, a dealer document prints the old address and phones, so the screen has to be filled before the first real paper and the checklist says so. the spelling of the business name is now his to settle in one box: the live app and the tenant row disagree by one letter, and from here only the settings field decides it. two tests hold the line: the letterhead is what the settings say, and a paper with no VAT number set does not claim one.

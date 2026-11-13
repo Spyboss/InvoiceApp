@@ -2,17 +2,11 @@
 
 D28 dropped the parallel month: this goes live on the real business and the first month is the test. this is the order to do it in, what to check at each step, and the two things that cannot be undone.
 
-## 1. keep the old book first
+## 1. nothing to carry over
 
-the import can prove that a file's totals match what the database stored. it cannot prove that the right file went in, or that the old app held something its export does not carry (D28). one command answers both:
+the streamlit app has no database. it keeps `invoices.csv` and `invoice_log.csv` beside itself, and neither file exists on this machine, so there is no old book to migrate and the import has nothing to take. the book starts empty.
 
-```
-pg_dump --format=custom --no-owner --file=old-app.dump "<the streamlit database>"
-```
-
-copy that file off the machine. it is the only copy of the old app's book that will exist once the old app stops, and it is what a question in March gets answered from.
-
-also export both csvs the import needs: `invoices.csv` and the yard sheet. `docs/IMPORT-FILES.md` is the column contract, and the import refuses anything that does not match it.
+if those two files surface on an old laptop, keep them and use `/import` on `invoices.csv` as it stands (`docs/IMPORT-FILES.md`). a dump of a database that does not exist is not worth taking.
 
 ## 2. a new database, empty
 
@@ -51,7 +45,7 @@ so do it in this order: open the service's railway-generated domain, finish `/se
 
 `/settings`, as the owner:
 
-- company details: whatever goes on an invoice, exactly as it should read.
+- company details: these four lines are the letterhead printed on every dealer document, so what is typed here is what a customer reads. the name falls back to the tenant's own name; the address and phones fall back to what the shop used before the screen existed; **the VAT line appears only when a number is set**, so a business that is not registered prints none (D30).
 - **invoice prefix `GM01`** (D27). four characters, upper case letters and digits. blank means "derive four characters from the slug again", so a mistake is undone by clearing the box. set it before the first paper, not after: changing it mid-year splits the year's serials across two codes.
 - discount approval percent, variance threshold, backdate limit. these are the anti-cheat controls, and changing them now writes an `settings.update` row with who did it and both values (found missing, fixed).
 - alert email and telegram chat, if alerts are to leave the building.
@@ -89,11 +83,11 @@ it compares row counts, the money in documents, receipts and vehicles, and the g
 
 record the date and the outcome in `docs/RESTORE-DRILL.md`. it cannot prove two things, and says so itself: that the app binary can issue and print an invoice from the restored copy, and that a dump exists tomorrow.
 
-## 9. the imported book
+## 9. the imported book, if there is one
 
-`/import` with the two csvs, then read the run back. papers keep the number the old app printed, and the counters are lifted above every imported number, cash and leasing sharing one series (D26).
+nothing to import today: step 1 found no old book. if the csvs surface later, `/import` takes them and the papers keep the number the old app printed, with the counters lifted above every imported number, cash and leasing sharing one series (D26).
 
-if a number ever looks wrong later, `/reconciliation` compares a fresh export from the old app against the papers that came in from a file, per day and per type. it is a tool for that day, not a routine (D28).
+if a number ever looks wrong, `/reconciliation` compares a fresh export from the old app against the papers that came in from a file, per day and per type. it is a tool for that day, not a routine (D28).
 
 ## sign-off
 
@@ -102,8 +96,8 @@ step 8 is done when all of these are true:
 - [ ] `/healthz` answers on the production domain, with the commit that is deployed
 - [ ] the owner account exists and nobody else created it
 - [ ] the invoice prefix reads `GM01` on the settings screen
-- [ ] the old app's dump is off the machine and opens with `pg_restore --list`
+- [ ] the old app's dump is off the machine and opens with `pg_restore --list`, or there was no old book (step 1)
 - [ ] the backup service has written one dump, and `pg_restore --list` reads it
 - [ ] the drill ran against production and matched
-- [ ] the two csvs imported, and the run's totals equal the file's
+- [ ] the book starts empty, or the csvs imported and the run's totals equal the file's
 - [ ] one staff member issued a real invoice unaided, printed it, and it carries the right serial
