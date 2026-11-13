@@ -103,12 +103,12 @@ stock_no,make,model,vehicle_type,variant,chassis_no,engine_no,colour,yom,cost,pr
 
 a unit that has left the yard is not on this sheet: it left with a sale, and the sale import is what puts it on the record. so `SOLD` and `RETURNED` are refused here.
 
-## the parallel month
+## checking the import later
 
-the import is half of step 7. the other half is proving the two apps agree, daily, for a month:
+reconciliation is not a gate. the parallel month it was built for was dropped (D28), so this is a tool for the day a number looks wrong, not a routine:
 
-1. at the counter, keep issuing paper in the old app.
-2. each evening, upload that day's `invoices.csv` to `/reconciliation` over the month to date.
+1. export `invoices.csv` from the old app for the range in doubt.
+2. upload it to `/reconciliation` over that range.
 3. the run compares the file with the papers this app imported, per day and per document type, keeping papers, price, down and balance apart.
 4. a difference writes a `RECONCILIATION` alert in the same transaction and names the first day to open. an agreement writes nothing.
 

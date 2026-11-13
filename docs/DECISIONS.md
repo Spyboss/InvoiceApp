@@ -374,3 +374,15 @@ rules:
 **cost** the prefix can now disagree with the tenant, and changing it part way through a year splits that year's serials across two prefixes. the counter is untouched, so no number repeats and none is skipped; what changes is the printed series, which an auditor will notice and a person will have to explain. paper already issued keeps the prefix it was printed with, so the record stays honest even though the series changes shape.
 
 **also recorded** the owner has confirmed the business is neither VAT registered nor advised by an accountant. the rest of the tax invoice field set (both parties' TIN, place of supply, mode of payment, amount in words) is therefore deliberately not built: printing tax fields the business has no registration to support would misrepresent the paper. the serial stays, because it costs nothing and registration is a turnover test he could cross later without warning, at which point the number is already in the shape the department asks for.
+
+## D28 - no parallel month; step 7 closes on the software
+
+**date** 2026-11-13 – **status** accepted (supersedes the acceptance half of D23)
+
+**context** D23 made a month of parallel running the acceptance for the import: the old streamlit app stays the system of record while this one carries the same paper beside it, reconciled daily, so a difference surfaces in a diff instead of at a counter. the owner has decided not to run it. he wants the system finished, deployed, and then tested and adjusted on the live business.
+
+**decision** the parallel month is dropped. step 7's acceptance is the software half only: an imported file's totals equal the totals the database stored, enforced by `check (source_totals = stored_totals)` rather than by a person remembering to compare; a file that does not add up is refused whole; every path is covered by a test. `/reconciliation` stays and works, as a tool he may use on any day he chooses, but it is not a gate and nothing waits on it.
+
+**why** the parallel month costs a month of entering every paper twice at the counter. that is a real cost paid by a real person, and the owner judges the software that would have been verified by it to be constrained already by the database instead. the decision is his to make; the cost of the month is his to refuse.
+
+**cost** the first month of live operation becomes the test. a difference between the old app's book and this one will surface when a customer or a clerk meets it, not in a daily diff on a quiet morning, and by then the paper is already in somebody's hand. two things blunt it, both already built: the import refuses a file that does not balance, so a bad import cannot silently poison the book, and the restore drill can put the database back to a known state. what is left unproven is narrow but real: whether the *right* file was imported, and whether the old app held anything the export does not carry. a dump of the old app's database taken before the first import and kept is the cheapest insurance against both, and costs one command.
