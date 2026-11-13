@@ -5,3 +5,7 @@
 *.md text eol=lf
 *.yml text eol=lf
 *.json text eol=lf
+# a script checked out with CRLF fails in bash with "$'\r': command not found",
+# which is a confusing way to lose an hour at a cutover
+*.sh text eol=lf
+Dockerfile text eol=lf
