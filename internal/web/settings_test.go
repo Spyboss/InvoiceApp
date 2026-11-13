@@ -54,6 +54,12 @@ func TestSettings(t *testing.T) {
 		}
 	}
 
+	// The change is on the trail. The discount limit decides what a clerk may
+	// do without a second pair of eyes, so it is not enough that it saved.
+	if audit := c.get("/audit").Body.String(); !strings.Contains(audit, "settings.update") {
+		t.Errorf("audit page does not record the settings change:\n%s", audit)
+	}
+
 	// A discount percent over 100 is refused.
 	form["discount_limit_percent"] = []string{"101"}
 	form["csrf_token"] = []string{c.csrfFrom(rec)}

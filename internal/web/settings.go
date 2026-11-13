@@ -6,7 +6,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/spyboss/invoiceapp/internal/audit"
 	"github.com/spyboss/invoiceapp/internal/auth"
+	"github.com/spyboss/invoiceapp/internal/httpx"
 	"github.com/spyboss/invoiceapp/internal/money"
 	"github.com/spyboss/invoiceapp/internal/store"
 	"github.com/spyboss/invoiceapp/internal/web/views"
@@ -64,12 +66,17 @@ func (s *Server) settingsSave() http.HandlerFunc {
 		}
 		fields := settingsFields(r)
 
-		// What a blank prefix prints today, read before anything is written.
-		// The screen redraws on a refusal and has to say what it said on the
-		// way in, or the owner cannot tell what leaving the box empty means.
+		// What a blank prefix prints today, and what the settings said before
+		// this attempt, both read before anything is written. The screen
+		// redraws on a refusal and has to say what it said on the way in, and
+		// the trail records the change against what was there.
+		var before store.Settings
 		var effectivePrefix string
 		err := s.store.InTenant(r.Context(), t.ID, func(q *store.Store) error {
 			var innerErr error
+			if before, innerErr = q.SettingsFor(r.Context(), t.ID); innerErr != nil {
+				return innerErr
+			}
 			effectivePrefix, innerErr = q.EffectiveSeriesPrefix(r.Context(), t.ID)
 			return innerErr
 		})
@@ -116,8 +123,7 @@ func (s *Server) settingsSave() http.HandlerFunc {
 		}
 		var savedErr error
 		err = s.store.InTenant(r.Context(), t.ID, func(q *store.Store) error {
-			var innerErr error
-			_, innerErr = q.SaveSettings(r.Context(), t.ID, u.User.ID, store.SettingsParams{
+			saved, innerErr := q.SaveSettings(r.Context(), t.ID, u.User.ID, store.SettingsParams{
 				CompanyName:          fields.CompanyName,
 				Address:              fields.Address,
 				Phone:                fields.Phone,
@@ -130,8 +136,22 @@ func (s *Server) settingsSave() http.HandlerFunc {
 				AlertEmail:           fields.AlertEmail,
 				AlertTelegramChat:    fields.AlertTelegramChat,
 			})
-			savedErr = innerErr
-			return innerErr
+			if innerErr != nil {
+				savedErr = innerErr
+				return innerErr
+			}
+			// The discount limit and the backdate limit decide what a clerk may
+			// do without a second pair of eyes, and the prefix is printed on
+			// every paper. Raising one of them changes what the whole shop is
+			// allowed to do, so it is recorded with who did it, in the same
+			// transaction as the change.
+			return audit.Write(r.Context(), q, t.ID, &u.User, httpx.ClientIP(r.Context()), r.UserAgent(), audit.Entry{
+				Action:   "settings.update",
+				Entity:   "settings",
+				EntityID: &t.ID,
+				Before:   settingsAudit(before),
+				After:    settingsAudit(saved),
+			})
 		})
 		if err != nil || savedErr != nil {
 			if errors.Is(savedErr, store.ErrInvalidSettings) {
@@ -195,4 +215,23 @@ func parsePercent(raw string) (int, error) {
 		return 0, errors.New("percent must be between 0 and 100")
 	}
 	return n, nil
+}
+
+// settingsAudit is what the trail keeps of a settings change. Values are
+// strings because the row is read by a person, and money stays in cents
+// because that is what was stored.
+func settingsAudit(s store.Settings) map[string]string {
+	return map[string]string{
+		"company_name":           s.CompanyName,
+		"address":                s.Address,
+		"phone":                  s.Phone,
+		"email":                  s.Email,
+		"vat_number":             s.VATNumber,
+		"series_prefix":          s.SeriesPrefix,
+		"discount_limit_percent": strconv.Itoa(s.DiscountLimitPercent),
+		"variance_alert_cents":   strconv.FormatInt(s.VarianceAlertCents, 10),
+		"backdate_days":          strconv.Itoa(s.BackdateDays),
+		"alert_email":            s.AlertEmail,
+		"alert_telegram_chat":    s.AlertTelegramChat,
+	}
 }
