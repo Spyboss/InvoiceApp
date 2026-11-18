@@ -42,6 +42,7 @@ templ paymentsBody(d PaymentsData) {
 	<article class="wide">
 		<header>
 			<h1>Payments</h1>
+			@Note("One receipt, one invoice.")
 			<form method="get" action="/payments" class="search">
 				<select name="method" aria-label="Payment method">
 					for _, m := range d.Methods {

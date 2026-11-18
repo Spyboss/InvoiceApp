@@ -25,27 +25,33 @@ func (s *Server) pageUser(r *http.Request) (store.Tenant, auth.SignedIn, bool) {
 	return t, u, true
 }
 
-// navLinks builds the header for whoever is signed in. A link only appears if
-// the user can open it, so nobody is offered a page that answers 403.
+// navLinks builds the sidebar for whoever is signed in. A link only appears if
+// the user can open it, so nobody is offered a page that answers 403. Groups
+// follow the order a day is worked (D31, docs/COUNTER.md); a group whose links
+// are all filtered out is absent from the slice, so it never renders empty.
 func navLinks(ctx context.Context, path string) []views.NavLink {
 	candidates := []struct {
 		href       string
 		label      string
+		group      string
 		permission string
 	}{
-		{"/customers", "Customers", "customer.read"},
-		{"/vehicles", "Vehicles", "vehicle.read"},
-		{"/stock", "Stock", "stock.read"},
-		{"/documents", "Documents", "document.read"},
-		{"/payments", "Payments", "payment.read"},
-		{"/day-end", "Day end", "dayend.read"},
-		{"/alerts", "Alerts", "alert.view"},
-		{"/reports", "Reports", "report.view"},
-		{"/reconciliation", "Reconciliation", "reconcile.run"},
-		{"/import", "Import", "import.run"},
-		{"/audit", "Audit", "audit.view"},
-		{"/settings", "Settings", "settings.write"},
-		{"/users", "Users", "user.manage"},
+		// counter: what a sale needs, then the money, then the drawer.
+		{"/documents", "Documents", "counter", "document.read"},
+		{"/customers", "Customers", "counter", "customer.read"},
+		{"/vehicles", "Vehicles", "counter", "vehicle.read"},
+		{"/stock", "Stock", "counter", "stock.read"},
+		{"/payments", "Payments", "counter", "payment.read"},
+		{"/day-end", "Day end", "counter", "dayend.read"},
+		// oversight: what the owner and the manager look at.
+		{"/reports", "Reports", "oversight", "report.view"},
+		{"/alerts", "Alerts", "oversight", "alert.view"},
+		{"/reconciliation", "Reconciliation", "oversight", "reconcile.run"},
+		// admin: opened to change something, not to read the day.
+		{"/import", "Import", "admin", "import.run"},
+		{"/audit", "Audit", "admin", "audit.view"},
+		{"/settings", "Settings", "admin", "settings.write"},
+		{"/users", "Users", "admin", "user.manage"},
 	}
 
 	links := make([]views.NavLink, 0, len(candidates))
@@ -56,6 +62,7 @@ func navLinks(ctx context.Context, path string) []views.NavLink {
 		links = append(links, views.NavLink{
 			Href:  c.href,
 			Label: c.label,
+			Group: c.group,
 			Here:  path == c.href || strings.HasPrefix(path, c.href+"/"),
 		})
 	}

@@ -1,66 +1,111 @@
 /* app.css: the only stylesheet we own. pico supplies the base. */
 
-:root {
+/* `:root:root`, not `:root`: pico declares these on `:root:not([data-theme=dark])`,
+   which is specificity (0,2,0) and so beats a plain `:root` (0,1,0) whatever the
+   load order. the brand green was therefore never applying — every button and
+   link rendered pico blue. this ties at (0,2,0) and, loading second, wins. */
+:root:root {
 	--pico-font-family: system-ui, -apple-system, "Segoe UI", roboto, sans-serif;
 	--pico-primary: #0b5d1e;
+	--pico-primary-background: #0b5d1e;
+	--pico-primary-border: #0b5d1e;
 	--pico-primary-hover: #084716;
 	--pico-primary-focus: rgba(11, 93, 30, 0.25);
 	--pico-primary-inverse: #fff;
 }
 
-.site-header {
+/* The frame is one sidebar (D31): the dealership, the destinations this
+   person may reach, who they are signed in as, and the way out. Permission
+   decides which links exist, so a group that has none does not render. */
+.shell {
+	display: grid;
+	grid-template-columns: 14rem minmax(0, 1fr);
+	align-items: start;
+}
+
+.sidebar {
+	position: sticky;
+	top: 0;
 	display: flex;
-	align-items: baseline;
-	justify-content: space-between;
-	flex-wrap: wrap;
-	gap: 0.5rem 1rem;
-	padding-block: 1rem;
-	border-bottom: 1px solid var(--pico-muted-border-color);
-	margin-bottom: 1.5rem;
+	flex-direction: column;
+	gap: 1rem;
+	padding: 1rem;
+	border-right: 1px solid var(--pico-muted-border-color);
+	min-height: 100vh;
+	box-sizing: border-box;
 }
 
-.site-nav {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 0.25rem 0.9rem;
-	font-size: 0.95rem;
-}
-
-.site-nav a {
-	color: var(--pico-muted-color);
-	text-decoration: none;
-}
-
-.site-nav a.here {
-	color: var(--pico-primary);
-	font-weight: 700;
-}
-
-.site-header .brand {
+.sidebar .brand {
 	font-weight: 700;
 	font-size: 1.05rem;
 	color: var(--pico-color);
 	text-decoration: none;
 }
 
-.site-header .who {
+.site-nav {
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
+}
+
+/* The group heading is a word, not a button: counter, oversight, admin. */
+.nav-label {
+	font-size: 0.72rem;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--pico-muted-color);
+	margin-top: 0.85rem;
+}
+
+.nav-label:first-child {
+	margin-top: 0;
+}
+
+.site-nav a {
+	display: block;
+	padding: 0.3rem 0.5rem;
+	border-radius: 0.3rem;
+	color: var(--pico-muted-color);
+	text-decoration: none;
+	font-size: 0.95rem;
+}
+
+.site-nav a:hover {
+	background: var(--pico-code-background-color);
+	color: var(--pico-color);
+}
+
+/* The page being read is a filled pill, so position is visible without
+   reading every word: the one thing navigation exists to show. */
+.site-nav a.here {
+	background: var(--pico-primary);
+	color: var(--pico-primary-inverse);
+	font-weight: 700;
+}
+
+.sidebar .who {
 	color: var(--pico-muted-color);
 	font-size: 0.9rem;
 }
 
-/* Who is signed in and the way out, kept together on the right of the header
-   so every screen can sign out and none of them repeats the footer. */
-.site-header .account {
+/* Who is signed in and the way out, kept at the foot of the sidebar so every
+   screen can sign out and none of them repeats the footer. */
+.sidebar .account {
 	display: flex;
 	align-items: baseline;
-	gap: 0.75rem;
+	flex-wrap: wrap;
+	gap: 0.5rem 0.75rem;
+	margin-top: auto;
+	padding-top: 0.75rem;
+	border-top: 1px solid var(--pico-muted-border-color);
 }
 
-.site-header .account form {
+.sidebar .account form {
 	margin: 0;
 }
 
-.site-header .account button {
+.sidebar .account button {
 	margin: 0;
 	padding: 0;
 	border: 0;
@@ -70,6 +115,60 @@
 	font-weight: 400;
 	text-decoration: underline;
 	cursor: pointer;
+}
+
+/* The one line a heading may carry (D31): something the heading cannot say.
+   Not a warning, not advice, and never present for symmetry. */
+.note {
+	margin-top: -0.6rem;
+	margin-bottom: 1.25rem;
+	color: var(--pico-muted-color);
+	font-size: 0.95rem;
+}
+
+/* A narrow screen has no room beside the tables, so the sidebar becomes a
+   row above the content. Not a drawer: a drawer is a second frame, and D24
+   spends the frame's budget on one. */
+@media (max-width: 640px) {
+	.shell {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.sidebar {
+		position: static;
+		flex-direction: row;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 0.5rem 1rem;
+		min-height: 0;
+		padding: 0.75rem 1rem;
+		border-right: 0;
+		border-bottom: 1px solid var(--pico-muted-border-color);
+	}
+
+	.site-nav {
+		flex-direction: row;
+		flex-wrap: wrap;
+		gap: 0.15rem 0.35rem;
+		width: 100%;
+	}
+
+	.nav-label {
+		margin-top: 0;
+		margin-right: 0.5rem;
+		align-self: center;
+	}
+
+	.site-nav a {
+		padding: 0.25rem 0.5rem;
+	}
+
+	.sidebar .account {
+		margin-top: 0;
+		padding-top: 0;
+		border-top: 0;
+		width: 100%;
+	}
 }
 
 article.narrow {
@@ -242,10 +341,4 @@ table {
 
 code {
 	word-break: break-all;
-}
-
-@media (max-width: 420px) {
-	.site-header .who {
-		display: none;
-	}
 }

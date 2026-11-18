@@ -59,6 +59,7 @@ templ Reconciliation(d ReconciliationData) {
 templ reconciliationBody(d ReconciliationData) {
 	<article class="wide">
 		<h1>Reconciliation</h1>
+		@Note("The old app's file against the papers held here.")
 
 		if len(d.Problems) > 0 {
 			<section role="alert">

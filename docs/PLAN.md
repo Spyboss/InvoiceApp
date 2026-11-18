@@ -15,10 +15,24 @@ status: `todo` · `in progress` · `done` · `blocked`
 | 6 | settings + approvals + notifications | tenant settings screens, permission editor, audit viewer, approval pins, email + telegram alerts | a non-owner cannot reach settings (test); discount above floor requires approval; alerts fire on void/variance/gap | done |
 | 7 | import | csv import of existing invoices and stock, reconciliation against the file | imported totals match the csv source exactly, enforced by a check constraint; a repeat upload writes nothing; a file that does not add up is refused whole (the month of parallel running was dropped by D28) | done |
 | 8 | cutover | production domain, the nightly dump (`backup/`), restore drill, `docs/CUTOVER.md`, `docs/COUNTER.md` | restore drill passes; staff issue a real invoice unaided on the production domain; owner signs off | in progress |
+| 9 | interface frame | destinations move to a grouped sidebar; `Layout` draws one optional line under `h1` (D31) | at 360px nothing scrolls sideways and the sidebar is a wrapping row, not a drawer; a role with three destinations renders one group and no empty headings; `templ generate -check`, `go vet`, `go test` green; no line restates its heading | done |
+
+step 9 runs **before** step 8 is signed off: the owner asked for the interface pass ahead of cutover, so staff are trained on the frame they will keep rather than retrained after going live. step 8 is paused at its checklist, not abandoned.
 
 ## current step
 
-step 8 (cutover) is **in progress**. the software side is now the sequence to run rather than advice:
+step 9 (interface frame) is **done**. D31 is the decision.
+
+- the destinations left the header row for a left sidebar in three task groups — counter (Documents, Customers, Vehicles, Stock, Payments, Day end), oversight (Reports, Alerts, Reconciliation), admin (Import, Audit, Settings, Users) — read in the order `docs/COUNTER.md` walks a day. permission still decides which links exist, and a group whose links are all filtered out does not render: a SERVICE user sees one heading and three links, verified against a real session rather than read off the code.
+- at 360px the sidebar becomes a wrapping row above the content, not a drawer, and `document.documentElement.scrollWidth === clientWidth` holds on every screen measured.
+- a heading may carry one line, and only one that says something the heading cannot. two screens have one — `/payments` ("One receipt, one invoice.") and `/reconciliation` ("The old app's file against the papers held here.") — and the rest draw none, because a blank is never filled for symmetry. the line is `views.Note`, one component, so the styling and the rule live in one place.
+- **the brand green had never applied.** pico declares `--pico-primary` on `:root:not([data-theme=dark])`, specificity (0,2,0), which beats a plain `:root` (0,1,0) whatever the load order; every button and link in the app rendered pico blue `#0172ad` instead of `#0b5d1e`. `:root` was byte-identical at HEAD, so this predates the step. the block is now `:root:root`, which ties and, loading second, wins.
+
+step 8 (cutover) is **paused at its checklist**, waiting on this. one item on that checklist cannot currently be completed, and it is not an interface problem:
+
+- **there is no way to create a second user.** `store.CreateUser` is called only by `setup.go` (first run, and `users > 0` refuses a second) and by tests; the `/users` routes change role, active state and password for rows that already exist. a tenant can therefore hold exactly one account, while `docs/CUTOVER.md` requires "one staff member issued a real invoice unaided". adding a user is a new step, not a fix inside step 9.
+
+the software side of step 8 is still the sequence to run rather than advice:
 
 - `docs/CUTOVER.md` is the order: the old app's dump first, an empty production database, the app with `APP_ENV=production`, `/setup` finished before the domain is public, the settings that print on paper, and a checklist that step 8 is signed off against.
 - `backup/` is a railway cron service that writes one dump a night to a volume on the other provider from the database, proves `pg_restore` can read it, and keeps 14 days (D29). the database itself keeps six hours of history on its current plan, which is why this exists.

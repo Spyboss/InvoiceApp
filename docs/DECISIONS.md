@@ -307,7 +307,7 @@ rules:
 
 ## D24 — the interface: one frame, facts instead of prose
 
-**date** 2026-11-03 · **status** accepted
+**date** 2026-11-03 · **status** accepted (heading rule refined by D31)
 
 **context** steps 2 to 7 grew fifteen screens one at a time, each written by whoever had the rule in their head that day. the result worked but read like documentation: a tagline under every heading explaining the screen to itself, a `<small>` under every input restating the constraint the server already enforces, empty states that advised instead of informing, and a footer on one page carrying a sign-out link the other fourteen did not. a clerk does not read a dealership's software; they look for the figure they came for. every sentence that is not a figure or a label is one more thing between them and it.
 
@@ -412,3 +412,20 @@ rules:
 **why** a settings screen whose values do not reach the paper is a screen that lies, and the owner finds out at the printer with a customer waiting. the VAT number is the sharp edge: an invoice that claims a registration the business does not hold is a problem with the revenue department, not a cosmetic one.
 
 **cost** until `/settings` is saved, a dealer document prints the old address and phones, so the screen has to be filled before the first real paper and the checklist says so. the spelling of the business name is now his to settle in one box: the live app and the tenant row disagree by one letter, and from here only the settings field decides it. two tests hold the line: the letterhead is what the settings say, and a paper with no VAT number set does not claim one.
+
+## D31 - the frame is a sidebar, and a heading may carry one line that says what the heading cannot
+
+**date** 2026-11-18 · **status** accepted (refines D24; supersedes only its "no tagline" bullet)
+
+**context** the owner looked at the running app and called the interface what it is. the destinations sat as thirteen flat links across one header row, wrapping to two lines on a normal screen, ordered the way the tables were built rather than the way a day is worked: a clerk who opens four of those fourteen times a day scrolls past nine they will never touch on every screen they visit. research on admin layouts puts the usable ceiling for a top row at seven to nine items, and past that the answer is a sidebar, not a tighter row. separately, D24 banned a tagline under every `h1`, and the ban was right about what it caught: the screens had grown a sentence restating their own heading, written by whoever had the rule in their head that day. but the industry examples the owner asked to be measured against carry a line under the title, and some of them are generated filler, so copying them would have imported exactly the slop D24 was written to remove. the two have to be told apart by what the line does, not by whether a line exists.
+
+**decision**
+
+- the destinations move to a left sidebar, grouped by task, three groups: **counter** (Documents, Customers, Vehicles, Stock, Payments, Day end), **oversight** (Reports, Alerts, Reconciliation), **admin** (Import, Audit, Settings, Users). permission still decides which links exist, exactly as now; a group whose links are all filtered out does not render, so a role that holds three destinations sees one group and no empty headings.
+- a heading may carry **one line, and only when the line says something the heading cannot**: what the page holds that its name does not say ("One receipt, one invoice."), or what is true of it that a reader would otherwise assume wrong. it is never a restatement, never advice, never a warning about a refusal the server already makes, and never a sentence containing efficiently, seamlessly, ensure, empower, comprehensive or robust.
+- the line is drawn by one component the frame owns (`views.Note`), placed directly beneath the `h1` by the screen that has something true to say. `Layout` cannot draw it itself: every heading sits inside its own width-constrained `<article>`, and on five pages the browser tab and the heading deliberately read differently ("Payment against INV-5" above "Receipt for Cash INV-5"), so the frame does not own the heading. the component is the frame's, so the styling and the rule live in one place rather than being retyped per screen.
+- a screen that has nothing true to say in one line draws none; the absence of a line is not a defect, and one is never added for symmetry. D24's other bullets stand unchanged: no helper text under an input, no paragraph above a form warning that the server will refuse, empty states still one line with no advice.
+
+**why** the sidebar is not a style choice, it is arithmetic: thirteen destinations do not fit a row without wrapping, and a wrapping row hides the active page's own position, which is the one thing navigation exists to show. grouping by task rather than by table follows the same rule the screens were written against: the counter works a day in a particular order, and the nav should read in that order. on the tagline, the test is who the sentence is for. a line that restates the heading is for nobody; a line that tells a clerk the one thing about the screen they would otherwise get wrong is for the person standing at the counter in a hurry, which is the reader D24 named in the first place.
+
+**cost** a sidebar eats width that tables want, so at 360px it has to become something else (a wrapping row above the content, not a drawer: a drawer is a second navigation and D24 already spends the frame's budget on one). the one-line rule is a judgement call rather than a ban, so it can be argued into filler again, and it has to be checked by reading rather than by grep. and a group heading that appears for one role and not another means the sidebar is not identical for every user, which is correct but means a screenshot in the docs is nobody's screen but the owner's.
