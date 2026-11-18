@@ -86,7 +86,7 @@ argon2id (owasp params), server-side sessions table (`token_hash`, user, ip, use
 - service `app` id `1b4d3976-2e56-4b81-ab8e-72697c62511d`, source `Spyboss/InvoiceApp` branch `rewrite/go-htmx`, dockerfile build.
 - app variables: `APP_ENV=staging`, `LOG_LEVEL=info`, `DATABASE_URL=<neon direct endpoint, sslmode=require>`, `GOTENBERG_URL=http://gotenberg.railway.internal:3000`, `GOTENBERG_USERNAME`, `GOTENBERG_PASSWORD`, `RAILWAY_DEPLOYMENT_DRAINING_SECONDS=30`.
 - service `gotenberg` id `fb378dc8-2626-427c-95e6-d2a934febadf`, image `gotenberg/gotenberg:8`, port 3000, basic auth on. staging keeps a public basic-auth domain (`https://gotenberg-staging-2041.up.railway.app`) so a dev machine can print without docker (D12); production gets none.
-- staging url `https://app-staging-895f.up.railway.app`.
+- staging url `https://gunawardana-staging.up.railway.app`.
 - database: neon project `invoiceapp` id `blue-hat-64568041`, org `Uminda` (`org-nameless-unit-86171587`), `aws-ap-southeast-1`, postgres 18, database `invoiceapp`, owner role `invoiceapp_owner`. runtime role `app_rw` is created by migration 0001. connection is the **direct** endpoint (no `-pooler`) so migrations and advisory locks keep a session.
 - service `Postgres` (id `1d936f7f-d551-47b5-9acb-b73d0dac6259`, volume `postgres-volume`) was deleted, volume included, on 2026-10-30 after the neon setup was verified from a signed in session. see D20.
 - `production` environment is created at cutover (step 8), not before. nothing here touches the streamlit app.
