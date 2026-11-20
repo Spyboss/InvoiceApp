@@ -10,7 +10,10 @@ import (
 )
 
 // The dealership's own paper: quotations, cash and leasing invoices, and
-// advance receipts. Simple enough to read on a phone and to print on A4.
+// advance receipts. Designed to look like a real business document on a phone
+// and on A4: a tinted letterhead, the document kind set in the brand green,
+// party boxes with clean borders, money right-aligned, and the balance row
+// picked out in the brand colour.
 const dealerTemplate = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -18,59 +21,92 @@ const dealerTemplate = `<!DOCTYPE html>
 <title>{{.Title}} {{.DocNo}}</title>
 <style>
 {{.FontCSS}}
-@page { size: A4; margin: 16mm 15mm 14mm 15mm; }
+@page { size: A4; margin: 14mm 13mm 12mm 13mm; }
 html, body { margin: 0; padding: 0; background: #fff; }
 * { box-sizing: border-box; }
-body { font-family: Carlito, Calibri, sans-serif; font-size: 10.5pt; color: #111; line-height: 1.35; }
-.top { display: flex; justify-content: space-between; gap: 24pt; align-items: flex-start; }
-.brand { font-size: 19pt; font-weight: 700; letter-spacing: .2pt; }
-.addr { margin-top: 4pt; font-size: 9.5pt; color: #333; }
+body { font-family: Carlito, Calibri, sans-serif; font-size: 10pt; color: #1a1a1a; line-height: 1.4; }
+
+:root {
+	--brand: #0b5d1e;
+	--brand-tint: #e9f2eb;
+	--brand-line: #d8e6dc;
+	--ink: #1a1a1a;
+	--muted: #5c6b63;
+}
+
+/* letterhead band across the top */
+.letterhead {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	padding: 9pt 11pt;
+	border: 0.6pt solid var(--brand-line);
+	border-bottom: 2.5pt solid var(--brand);
+	border-radius: 3pt;
+	background: #fbfdfc;
+	margin-bottom: 14pt;
+}
+.brand { font-size: 19pt; font-weight: 700; color: var(--brand); letter-spacing: .3pt; line-height: 1.1; }
+.addr { margin-top: 3pt; font-size: 8.5pt; color: var(--muted); }
 .doc { text-align: right; }
-.doc .title { font-size: 16pt; font-weight: 700; letter-spacing: .4pt; }
-.doc .no { margin-top: 5pt; font-size: 11pt; font-weight: 700; }
-.doc .date { margin-top: 2pt; font-size: 10pt; }
-hr { border: 0; border-top: 1.5pt solid #111; margin: 10pt 0 12pt; }
-.parties { display: flex; gap: 14pt; }
-.box { flex: 1; border: 0.6pt solid #999; padding: 8pt 10pt; min-height: 86pt; }
-.box h2 { margin: 0 0 4pt; font-size: 8.5pt; font-weight: 700; letter-spacing: .8pt; text-transform: uppercase; color: #555; }
-.box p { margin: 0; }
-.box .name { font-weight: 700; font-size: 11pt; margin-bottom: 3pt; }
-table.lines { width: 100%; border-collapse: collapse; margin-top: 14pt; }
-table.lines th { text-align: left; font-size: 8.5pt; letter-spacing: .8pt; text-transform: uppercase; color: #555; border-bottom: 0.8pt solid #111; padding: 0 4pt 4pt; }
-table.lines td { padding: 7pt 4pt; border-bottom: 0.5pt solid #ccc; vertical-align: top; }
+.doc .kind { font-size: 15pt; font-weight: 700; color: var(--brand); letter-spacing: .5pt; line-height: 1.1; }
+.doc .no { font-size: 11pt; font-weight: 700; color: var(--ink); margin-top: 2pt; }
+.doc .date { font-size: 9pt; color: var(--muted); margin-top: 1pt; }
+
+/* the two boxes: customer and vehicle */
+.parties { display: flex; gap: 12pt; margin-bottom: 14pt; }
+.box { flex: 1; border: 0.6pt solid var(--brand-line); border-radius: 3pt; padding: 8pt 10pt; background: #fff; }
+.box h2 { margin: 0 0 5pt; font-size: 8pt; font-weight: 700; letter-spacing: 1pt; text-transform: uppercase; color: var(--brand); }
+.box .name { font-weight: 700; font-size: 10.5pt; color: var(--ink); margin-bottom: 2.5pt; }
+.box p { margin: 0 0 2pt; font-size: 9pt; color: var(--ink); }
+
+/* line items */
+table.lines { width: 100%; border-collapse: collapse; margin-top: 2pt; }
+table.lines th { text-align: left; font-size: 8pt; letter-spacing: .8pt; text-transform: uppercase; color: var(--brand); border-bottom: 1.2pt solid var(--brand); padding: 0 4pt 5pt; }
+table.lines td { padding: 7pt 4pt; border-bottom: 0.5pt solid var(--brand-line); vertical-align: top; font-size: 9.5pt; }
 table.lines .right { text-align: right; }
-table.lines small { color: #444; font-size: 9pt; }
-.totals { display: flex; justify-content: flex-end; margin-top: 10pt; }
-.totals table { border-collapse: collapse; min-width: 240pt; }
-.totals td { padding: 3pt 4pt; }
-.totals td.label { text-align: right; color: #333; }
-.totals td.amount { text-align: right; width: 110pt; white-space: nowrap; }
-.totals tr.grand td { border-top: 0.8pt solid #111; font-weight: 700; padding-top: 6pt; }
-.finance { margin-top: 14pt; border-left: 2.5pt solid #111; padding: 2pt 0 2pt 10pt; }
-.finance h3 { margin: 0 0 2pt; font-size: 9pt; text-transform: uppercase; letter-spacing: .6pt; color: #555; }
-.notes { margin-top: 14pt; }
-.notes h3 { margin: 0 0 3pt; font-size: 9pt; text-transform: uppercase; letter-spacing: .6pt; color: #555; }
-.notes p { margin: 0; white-space: pre-wrap; }
-.terms { margin-top: 16pt; font-size: 9pt; color: #333; }
+table.lines small { color: var(--muted); font-size: 8.5pt; }
+
+/* totals, right aligned; the balance row is the brand colour on a tint */
+.totals { display: flex; justify-content: flex-end; margin-top: 12pt; }
+.totals table { border-collapse: collapse; min-width: 220pt; }
+.totals td { padding: 3pt 5pt; font-size: 9.5pt; }
+.totals td.label { text-align: right; color: var(--muted); font-size: 9pt; }
+.totals td.amount { text-align: right; width: 110pt; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.totals tr.grand td { border-top: 1.2pt solid var(--brand); font-weight: 700; color: var(--brand); background: var(--brand-tint); padding-top: 5pt; }
+
+/* finance box for leases */
+.finance { margin-top: 14pt; border: 0.6pt solid var(--brand-line); border-left: 2.5pt solid var(--brand); border-radius: 3pt; padding: 7pt 10pt; background: #fbfdfc; }
+.finance h3 { margin: 0 0 3pt; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .8pt; color: var(--brand); }
+.finance p { margin: 0 0 2pt; font-size: 9pt; color: var(--ink); }
+
+/* notes */
+.notes { margin-top: 14pt; border: 0.6pt solid var(--brand-line); border-radius: 3pt; padding: 7pt 10pt; background: #fff; }
+.notes h3 { margin: 0 0 3pt; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .8pt; color: var(--brand); }
+.notes p { margin: 0; white-space: pre-wrap; font-size: 9pt; color: var(--ink); }
+
+/* terms */
+.terms { margin-top: 16pt; font-size: 9pt; color: var(--muted); }
 .terms p { margin: 0 0 3pt; }
-.sign { margin-top: 52pt; display: flex; justify-content: space-between; align-items: flex-end; }
-.sign .line { border-top: 0.6pt solid #111; padding-top: 4pt; width: 180pt; text-align: center; font-size: 9pt; }
-.sign .stamp { font-size: 8pt; color: #777; }
+
+/* signature block */
+.sign { margin-top: 56pt; display: flex; justify-content: space-between; align-items: flex-end; }
+.sign .stamp { font-size: 8pt; color: var(--muted); }
+.sign .line { border-top: 0.6pt solid var(--ink); padding-top: 3pt; width: 170pt; text-align: center; font-size: 8.5pt; color: var(--ink); }
 </style>
 </head>
 <body>
-<header class="top">
+<header class="letterhead">
   <div>
     <div class="brand">{{.Tenant}}</div>
     <div class="addr">{{.Address}}<br>{{.Phones}}{{if .VAT}}<br>VAT Reg. No. {{.VAT}}{{end}}</div>
   </div>
   <div class="doc">
-    <div class="title">{{.Title}}</div>
+    <div class="kind">{{.Title}}</div>
     <div class="no">No. {{.DocNo}}</div>
     <div class="date">Date: {{.Date}}</div>
   </div>
 </header>
-<hr>
 <section class="parties">
   <div class="box">
     <h2>Customer</h2>
