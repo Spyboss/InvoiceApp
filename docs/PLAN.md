@@ -16,10 +16,13 @@ status: `todo` · `in progress` · `done` · `blocked`
 | 7 | import | csv import of existing invoices and stock, reconciliation against the file | imported totals match the csv source exactly, enforced by a check constraint; a repeat upload writes nothing; a file that does not add up is refused whole (the month of parallel running was dropped by D28) | done |
 | 8 | cutover | production domain, the nightly dump (`backup/`), restore drill, `docs/CUTOVER.md`, `docs/COUNTER.md` | restore drill passes; staff issue a real invoice unaided on the production domain; owner signs off | in progress |
 | 9 | interface frame | destinations move to a grouped sidebar; `Layout` draws one optional line under `h1` (D31) | at 360px nothing scrolls sideways and the sidebar is a wrapping row, not a drawer; a role with three destinations renders one group and no empty headings; `templ generate -check`, `go vet`, `go test` green; no line restates its heading | done |
+| 10 | add a user | `/users` gains a create form (name, email, role, password) behind `user.manage` | an owner creates a second account and signing in as it shows only that role's links; a duplicate email in the same tenant is refused; a password under 12 characters is refused; the create writes `user.create` to `audit_log` in the same transaction; `templ generate -check`, `go vet`, `go test` green at 360px | todo |
 
-step 9 runs **before** step 8 is signed off: the owner asked for the interface pass ahead of cutover, so staff are trained on the frame they will keep rather than retrained after going live. step 8 is paused at its checklist, not abandoned.
+steps 9 and 10 both run **before** step 8 is signed off: the owner asked for the interface pass ahead of cutover, and step 8's own checklist requires a staff account that does not exist yet. step 8 is paused at its checklist, not abandoned.
 
 ## current step
+
+step 10 (add a user) is **todo**. it exists because of a gap found while testing step 9, not as new scope: `store.CreateUser` is called only by `setup.go` (first run, and `users > 0` refuses a second) and by tests, while the `/users` routes change role, active state and password for rows that already exist. a tenant therefore holds exactly one account, and `docs/CUTOVER.md` requires "one staff member issued a real invoice unaided". the screen goes on `/users`, behind `user.manage`, reusing `auth.ValidatePassword` for the 12 character rule and writing `user.create` inside the same transaction, exactly as `setup.go` does for the first owner.
 
 step 9 (interface frame) is **done**. D31 is the decision.
 
