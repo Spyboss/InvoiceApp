@@ -5,13 +5,97 @@
    load order. the brand green was therefore never applying — every button and
    link rendered pico blue. this ties at (0,2,0) and, loading second, wins. */
 :root:root {
+	/* a palette rather than one green. page, surface, ink and line are the
+	   four a screen is built from; the brand comes in three steps so a tint,
+	   a fill and a deep anchor all exist and nothing is mixed at the point of
+	   use. --brand stays #0b5d1e (the anchor); --brand-2 is the action
+	   green, lifted because #0b5d1e on a button reads almost black. */
+	--bg: #f3f5f4;
+	--surface: #fff;
+	--ink: #16211c;
+	--ink-2: #5c6b63;
+	--line: #e3e8e5;
+	--brand: #0b5d1e;
+	--brand-2: #12803a;
+	--brand-tint: #e9f2eb;
+
+	/* the sidebar's own three, so a light and a dark frame are one block apart */
+	--side-bg: #0e2419;
+	--side-ink: #f0f5f2;
+	--side-muted: #9db3a6;
+	--side-line: rgba(255, 255, 255, 0.09);
+	--side-active-bg: #15663a;
+	--side-active-ink: #fff;
+	--side-active-ring: rgba(255, 255, 255, 0.14);
+
 	--pico-font-family: system-ui, -apple-system, "Segoe UI", roboto, sans-serif;
-	--pico-primary: #0b5d1e;
-	--pico-primary-background: #0b5d1e;
-	--pico-primary-border: #0b5d1e;
-	--pico-primary-hover: #084716;
-	--pico-primary-focus: rgba(11, 93, 30, 0.25);
+	--pico-background-color: var(--bg);
+	--pico-color: var(--ink);
+	--pico-muted-color: var(--ink-2);
+	--pico-muted-border-color: var(--line);
+
+	--pico-primary: var(--brand-2);
+	--pico-primary-background: var(--brand-2);
+	--pico-primary-border: var(--brand-2);
+	--pico-primary-hover: var(--brand);
+	--pico-primary-focus: rgba(18, 128, 58, 0.22);
 	--pico-primary-inverse: #fff;
+
+	/* pico's secondary is a slate slab (#525f7a) and its hover is darker
+	   still. a filter control must never be the loudest thing on the page,
+	   so the secondary becomes an outline of the line colour instead. */
+	--pico-secondary: var(--ink-2);
+	--pico-secondary-background: var(--surface);
+	--pico-secondary-border: var(--line);
+	--pico-secondary-underline: var(--ink-2);
+	--pico-secondary-hover: var(--ink);
+	--pico-secondary-hover-background: var(--surface);
+	--pico-secondary-hover-border: #c9d2cd;
+	--pico-secondary-hover-underline: var(--ink);
+	--pico-secondary-focus: rgba(92, 107, 99, 0.2);
+	--pico-secondary-inverse: var(--ink);
+
+	--pico-form-element-background-color: var(--surface);
+	--pico-form-element-border-color: #d5dcd8;
+	--pico-form-element-color: var(--ink);
+	--pico-form-element-active-background-color: var(--surface);
+	--pico-form-element-active-border-color: var(--brand-2);
+	--pico-form-element-focus-color: var(--brand-2);
+
+	/* the card is what gives a screen depth: a real border and a real shadow
+	   instead of pico's 0.29px at 1.6% opacity, which renders as nothing. */
+	--pico-card-background-color: var(--surface);
+	--pico-card-border-color: var(--line);
+	--pico-card-box-shadow: 0 1px 2px rgba(22, 33, 28, 0.04), 0 4px 14px rgba(22, 33, 28, 0.05);
+	/* pico paints every `article > header` this near-white, which on a white
+	   card reads as a dirty band rather than a deliberate surface. */
+	--pico-card-sectioning-background-color: transparent;
+
+	--pico-code-background-color: var(--brand-tint);
+	--pico-text-selection-color: rgba(18, 128, 58, 0.22);
+	--pico-box-shadow: 0 1px 2px rgba(22, 33, 28, 0.04), 0 4px 14px rgba(22, 33, 28, 0.05);
+}
+
+body {
+	-webkit-font-smoothing: antialiased;
+}
+
+/* everything that can be pressed or focused answers in the same beat, so the
+   screen feels responsive rather than static. */
+a,
+button,
+.site-nav a {
+	transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+:focus-visible {
+	outline: 2px solid var(--brand-2);
+	outline-offset: 2px;
+}
+
+h1 {
+	letter-spacing: -0.02em;
+	color: var(--ink);
 }
 
 /* The frame is one sidebar (D31): the dealership, the destinations this
@@ -19,8 +103,9 @@
    decides which links exist, so a group that has none does not render. */
 .shell {
 	display: grid;
-	grid-template-columns: 14rem minmax(0, 1fr);
+	grid-template-columns: 15rem minmax(0, 1fr);
 	align-items: start;
+	min-height: 100vh;
 }
 
 .sidebar {
@@ -29,33 +114,38 @@
 	display: flex;
 	flex-direction: column;
 	gap: 1rem;
-	padding: 1rem;
-	border-right: 1px solid var(--pico-muted-border-color);
+	padding: 1.1rem 0.9rem;
+	background: var(--side-bg);
+	border-right: 1px solid var(--side-line);
 	min-height: 100vh;
 	box-sizing: border-box;
 }
 
 .sidebar .brand {
 	font-weight: 700;
-	font-size: 1.05rem;
-	color: var(--pico-color);
+	font-size: 1.02rem;
+	letter-spacing: -0.015em;
+	color: var(--side-ink);
 	text-decoration: none;
+	padding-inline: 0.55rem;
 }
 
 .site-nav {
 	display: flex;
 	flex-direction: column;
-	gap: 0.15rem;
+	gap: 0.1rem;
 }
 
 /* The group heading is a word, not a button: counter, oversight, admin. */
 .nav-label {
-	font-size: 0.72rem;
+	font-size: 0.66rem;
 	font-weight: 700;
-	letter-spacing: 0.06em;
+	letter-spacing: 0.08em;
 	text-transform: uppercase;
-	color: var(--pico-muted-color);
-	margin-top: 0.85rem;
+	color: var(--side-muted);
+	opacity: 0.75;
+	margin-top: 1rem;
+	padding-inline: 0.55rem;
 }
 
 .nav-label:first-child {
@@ -64,29 +154,31 @@
 
 .site-nav a {
 	display: block;
-	padding: 0.3rem 0.5rem;
-	border-radius: 0.3rem;
-	color: var(--pico-muted-color);
+	padding: 0.4rem 0.55rem;
+	border-radius: 0.4rem;
+	color: var(--side-muted);
 	text-decoration: none;
-	font-size: 0.95rem;
+	font-size: 0.93rem;
+	font-weight: 500;
 }
 
 .site-nav a:hover {
-	background: var(--pico-code-background-color);
-	color: var(--pico-color);
+	background: var(--side-active-bg);
+	color: var(--side-ink);
 }
 
 /* The page being read is a filled pill, so position is visible without
    reading every word: the one thing navigation exists to show. */
 .site-nav a.here {
-	background: var(--pico-primary);
-	color: var(--pico-primary-inverse);
+	background: var(--side-active-bg);
+	color: var(--side-active-ink);
 	font-weight: 700;
+	box-shadow: inset 0 0 0 1px var(--side-active-ring);
 }
 
 .sidebar .who {
-	color: var(--pico-muted-color);
-	font-size: 0.9rem;
+	color: var(--side-muted);
+	font-size: 0.88rem;
 }
 
 /* Who is signed in and the way out, kept at the foot of the sidebar so every
@@ -97,8 +189,9 @@
 	flex-wrap: wrap;
 	gap: 0.5rem 0.75rem;
 	margin-top: auto;
-	padding-top: 0.75rem;
-	border-top: 1px solid var(--pico-muted-border-color);
+	padding-top: 0.8rem;
+	padding-inline: 0.55rem;
+	border-top: 1px solid var(--side-line);
 }
 
 .sidebar .account form {
@@ -110,20 +203,21 @@
 	padding: 0;
 	border: 0;
 	background: none;
-	color: var(--pico-primary);
-	font-size: 0.9rem;
-	font-weight: 400;
+	color: var(--brand-2);
+	font-size: 0.88rem;
+	font-weight: 500;
 	text-decoration: underline;
+	text-underline-offset: 2px;
 	cursor: pointer;
 }
 
 /* The one line a heading may carry (D31): something the heading cannot say.
    Not a warning, not advice, and never present for symmetry. */
 .note {
-	margin-top: -0.6rem;
+	margin-top: -0.55rem;
 	margin-bottom: 1.25rem;
-	color: var(--pico-muted-color);
-	font-size: 0.95rem;
+	color: var(--ink-2);
+	font-size: 0.94rem;
 }
 
 /* A narrow screen has no room beside the tables, so the sidebar becomes a
@@ -143,7 +237,7 @@
 		min-height: 0;
 		padding: 0.75rem 1rem;
 		border-right: 0;
-		border-bottom: 1px solid var(--pico-muted-border-color);
+		border-bottom: 1px solid var(--side-line);
 	}
 
 	.site-nav {
@@ -171,28 +265,47 @@
 	}
 }
 
+/* the card. every screen's content sits on one, which is what separates the
+   page from the work instead of white running into white. */
+article {
+	margin-block: 1.75rem;
+	padding: 1.5rem 1.6rem;
+	border: 1px solid var(--line);
+	border-radius: 10px;
+	background: var(--surface);
+	box-shadow: var(--pico-card-box-shadow);
+}
+
+article > header {
+	background: transparent;
+	border-bottom: 1px solid var(--line);
+	margin: -1.5rem -1.6rem 1.25rem;
+	padding: 1.25rem 1.6rem;
+}
+
 article.narrow {
 	max-width: 26rem;
 	margin-inline: auto;
 }
 
 article.wide {
-	max-width: 56rem;
+	max-width: 60rem;
 	margin-inline: auto;
 }
 
 .facts {
 	display: grid;
 	grid-template-columns: max-content 1fr;
-	gap: 0.25rem 1rem;
+	gap: 0.3rem 1.25rem;
 }
 
 .facts dt {
-	color: var(--pico-muted-color);
+	color: var(--ink-2);
 }
 
 .facts dd {
 	margin: 0;
+	font-variant-numeric: tabular-nums;
 }
 
 .permissions {
@@ -200,13 +313,16 @@ article.wide {
 	padding: 0;
 	display: flex;
 	flex-wrap: wrap;
-	gap: 0.5rem;
+	gap: 0.4rem;
 }
 
 .permissions li {
-	background: var(--pico-code-background-color);
-	border-radius: 0.25rem;
-	padding: 0.15rem 0.45rem;
+	background: var(--brand-tint);
+	color: var(--brand);
+	border-radius: 0.3rem;
+	padding: 0.15rem 0.5rem;
+	font-size: 0.8rem;
+	font-weight: 600;
 }
 
 /* A table wider than the screen scrolls inside its own box rather than pushing
@@ -227,8 +343,39 @@ article.wide {
 }
 
 .table-scroll::-webkit-scrollbar-thumb {
-	background: var(--pico-muted-border-color);
+	background: #cfd8d3;
 	border-radius: 0.25rem;
+}
+
+/* a table needs a head you can see and a row that answers the pointer, or it
+   reads as a wall of figures. */
+table {
+	font-size: 0.875rem;
+	white-space: nowrap;
+	border-collapse: collapse;
+	font-variant-numeric: tabular-nums;
+}
+
+thead th {
+	background: #f7f9f8;
+	color: var(--ink-2);
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	border-bottom: 1px solid var(--line);
+}
+
+tbody tr {
+	transition: background-color 120ms ease;
+}
+
+tbody tr:hover {
+	background: #f7f9f8;
+}
+
+tbody tr:last-child td {
+	border-bottom: 0;
 }
 
 /* A narrow screen keeps every figure whole: the cell gives up padding before a
@@ -267,7 +414,7 @@ article.wide {
 .search {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 0.5rem;
+	gap: 0.6rem;
 	align-items: end;
 }
 
@@ -278,50 +425,69 @@ article.wide {
 	flex: 1 1 10rem;
 }
 
+/* pico gives a button inside a form width:100%, so the filter submit ran the
+   full width of the card and became the loudest thing on the screen. it is a
+   filter; it sits beside the fields it submits. */
+.search button,
+.actions button {
+	width: auto;
+}
+
 .actions {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 0.5rem;
+	gap: 0.6rem;
 	align-items: center;
 	margin-block: 0.5rem;
 }
 
 .status {
 	display: inline-block;
-	font-size: 0.78rem;
+	font-size: 0.74rem;
 	font-weight: 700;
-	letter-spacing: 0.02em;
-	padding: 0.1rem 0.45rem;
-	border-radius: 0.25rem;
-	background: var(--pico-code-background-color);
+	letter-spacing: 0.03em;
+	padding: 0.15rem 0.5rem;
+	border-radius: 0.3rem;
+	background: var(--brand-tint);
+	color: var(--brand);
 }
 
 .tabs {
 	display: flex;
 	flex-wrap: wrap;
-	gap: 0.25rem 0.9rem;
-	font-size: 0.95rem;
-	margin-bottom: 0.5rem;
+	gap: 0.25rem 1rem;
+	font-size: 0.94rem;
+	margin-bottom: 0.75rem;
+	border-bottom: 1px solid var(--line);
 }
 
 .tabs a {
-	color: var(--pico-muted-color);
+	color: var(--ink-2);
 	text-decoration: none;
+	padding-bottom: 0.5rem;
+	border-bottom: 2px solid transparent;
+	margin-bottom: -1px;
+}
+
+.tabs a:hover {
+	color: var(--ink);
 }
 
 .tabs a.here {
-	color: var(--pico-primary);
+	color: var(--brand);
 	font-weight: 700;
+	border-bottom-color: var(--brand-2);
 }
 
 .muted {
-	color: var(--pico-muted-color);
+	color: var(--ink-2);
 }
 
 .quote-summary {
-	border: 1px solid var(--pico-muted-border-color);
-	border-radius: 0.25rem;
-	padding: 0.75rem 1rem;
+	border: 1px solid var(--line);
+	border-radius: 0.5rem;
+	background: var(--brand-tint);
+	padding: 0.8rem 1rem;
 	margin-bottom: 1rem;
 }
 
@@ -332,11 +498,6 @@ article.wide {
 details summary {
 	cursor: pointer;
 	margin-block: 1rem 0.25rem;
-}
-
-table {
-	font-size: 0.85rem;
-	white-space: nowrap;
 }
 
 code {
