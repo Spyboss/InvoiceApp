@@ -2,11 +2,11 @@
 
 D28 dropped the parallel month: this goes live on the real business and the first month is the test. this is the order to do it in, what to check at each step, and the two things that cannot be undone.
 
-## 1. nothing to carry over
+## 1. what carries over
 
-the streamlit app has no database. it keeps `invoices.csv` and `invoice_log.csv` beside itself, and neither file exists on this machine, so there is no old book to migrate and the import has nothing to take. the book starts empty.
+the streamlit app has no database. it keeps `invoices.csv` and `invoice_log.csv` beside itself, and neither file exists on this machine, so there is no dump to restore. a dump of a database that does not exist is not worth taking.
 
-if those two files surface on an old laptop, keep them and use `/import` on `invoices.csv` as it stands (`docs/IMPORT-FILES.md`). a dump of a database that does not exist is not worth taking.
+what the app did leave is its printed output. twelve piaggio pdfs were mined into `docs/invoices.csv` (D32) and go in through `/import` while the book is still empty. they have to go in before the first live paper rather than after, because the counter starts at 0001 and the old book already holds a 0001.
 
 ## 2. a new database, empty
 
@@ -83,9 +83,9 @@ it compares row counts, the money in documents, receipts and vehicles, and the g
 
 record the date and the outcome in `docs/RESTORE-DRILL.md`. it cannot prove two things, and says so itself: that the app binary can issue and print an invoice from the restored copy, and that a dump exists tomorrow.
 
-## 9. the imported book, if there is one
+## 9. the imported book
 
-nothing to import today: step 1 found no old book. if the csvs surface later, `/import` takes them and the papers keep the number the old app printed, with the counters lifted above every imported number, cash and leasing sharing one series (D26).
+`docs/invoices.csv` carries the three papers mined from the printed pdfs (D32). `/import` takes it with `default_make` set to PIAGGIO, the papers keep the number the old app printed, and the counters lift above every imported number, cash and leasing sharing one series (D26). after it the first live paper is 0006.
 
 if a number ever looks wrong, `/reconciliation` compares a fresh export from the old app against the papers that came in from a file, per day and per type. it is a tool for that day, not a routine (D28).
 

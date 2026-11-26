@@ -429,3 +429,20 @@ rules:
 **why** the sidebar is not a style choice, it is arithmetic: thirteen destinations do not fit a row without wrapping, and a wrapping row hides the active page's own position, which is the one thing navigation exists to show. grouping by task rather than by table follows the same rule the screens were written against: the counter works a day in a particular order, and the nav should read in that order. on the tagline, the test is who the sentence is for. a line that restates the heading is for nobody; a line that tells a clerk the one thing about the screen they would otherwise get wrong is for the person standing at the counter in a hurry, which is the reader D24 named in the first place.
 
 **cost** a sidebar eats width that tables want, so at 360px it has to become something else (a wrapping row above the content, not a drawer: a drawer is a second navigation and D24 already spends the frame's budget on one). the one-line rule is a judgement call rather than a ban, so it can be argued into filler again, and it has to be checked by reading rather than by grep. and a group heading that appears for one role and not another means the sidebar is not identical for every user, which is correct but means a screenshot in the docs is nobody's screen but the owner's.
+
+## D32 - the old book was printed, not exported, and it comes in as three papers
+
+**date** 2026-11-26 - **status** accepted (supersedes CUTOVER step 1, which recorded that there was no old book)
+
+**context** CUTOVER step 1 recorded that the streamlit app keeps `invoices.csv` and `invoice_log.csv` beside itself and that neither file exists on this machine, so the book would start empty. that was true of the csvs and false of the book: the printed output was on the machine. twelve piaggio pdfs sit in `Downloads` (three sales, two advances, seven proformas), alongside fifty five tmr trading lanka bills from a different system, bank receipts, and the dev artifacts of building this app's own renderer. no `invoices.csv` exists anywhere on the machine, so there was nothing to hand `/import` directly and the papers had to be read off the pdfs.
+
+**decision**
+
+- the book is `docs/invoices.csv`, three rows, mined from the printed pdfs and proven against `legacy.ParseInvoices`: three papers, no problems, 4,798,000 down plus 2,399,000 balance against 7,197,000 gross.
+- **sales 0001** LOKU GAMHEWAGE SAMANTHA, paid in full. **sales 0005** v. p. vijayalatha at 2,399,000, which supersedes sales 0004 at 1,849,000: same customer, same chassis, same day, two prices, and the later higher number is the one honoured. **proforma 0001** asoka heellage on singer finance, balance 2,399,000.
+- six proformas are skipped: the old app wrote them before a chassis was allocated, and `TBD` is three characters where the import requires five, so they are refused rather than questionable. the advance on LOKU's chassis is superseded by his sale; the other advance has no deposit and no chassis, so it is refused too.
+- tmr bills are a different business on a different system and stay out.
+
+**why** the number is what fixes the order. the app refuses a paper whose number it already holds under a different customer, chassis, date or money, so a book imported after the first live invoice would collide with it: the counter starts at 0001 and the old book already holds a 0001. import while the book is empty and the counters lift above every imported number (D26), so the first live paper continues at 0006 instead of fighting the paper book for 0001. going live empty and adding the history later does not work for these numbers at all, which is why the import belongs inside the cutover rather than after it.
+
+**cost** three papers is a thin history: sales 0002 and 0003 were never downloaded or never issued, and the six skipped proformas are quotes the dealership may still want on a record they do not have. the import is one shot at the numbers it carries, so a row that is wrong is corrected in the csv before it goes in, not after.

@@ -89,7 +89,8 @@ argon2id (owasp params), server-side sessions table (`token_hash`, user, ip, use
 - staging url `https://gunawardana-staging.up.railway.app`.
 - database: neon project `invoiceapp` id `blue-hat-64568041`, org `Uminda` (`org-nameless-unit-86171587`), `aws-ap-southeast-1`, postgres 18, database `invoiceapp`, owner role `invoiceapp_owner`. runtime role `app_rw` is created by migration 0001. connection is the **direct** endpoint (no `-pooler`) so migrations and advisory locks keep a session.
 - service `Postgres` (id `1d936f7f-d551-47b5-9acb-b73d0dac6259`, volume `postgres-volume`) was deleted, volume included, on 2026-10-30 after the neon setup was verified from a signed in session. see D20.
-- `production` environment is created at cutover (step 8), not before. nothing here touches the streamlit app.
+- `production` environment `2197c487-26e8-449f-bf77-38b797734509` was created on 2026-11-26 by duplicating staging (CUTOVER step 3), service domain `app-production-1057a9a2.up.railway.app`, and points at its own neon project (below). nothing here touches the streamlit app.
+- database (production): neon project `invoiceapp-production` id `wild-wildflower-26580228`, `aws-ap-southeast-1`, postgres 18, database `neondb`, owner role `neondb_owner`, created 2026-11-26 and empty until the import runs. same direct-endpoint rule as staging.
 
 ## 7. deploy
 
@@ -97,7 +98,7 @@ argon2id (owasp params), server-side sessions table (`token_hash`, user, ip, use
 - environments: `staging` and `production`. staging has its own database. production only gets merged, reviewed code.
 - migrations run at boot with a postgres advisory lock; a failed migration aborts the boot (no half-migrated app).
 - `/healthz` checks db ping and returns version + commit. railway healthcheck points at it.
-- config strictly from env; the app refuses to boot without `DATABASE_URL`, `SESSION_SECRET`, `GOTENBERG_URL`, `TENANT_ROOT_DOMAIN`.
+- config strictly from env; the app refuses to boot without `DATABASE_URL`, and it fails on `APP_ENV` outside dev, staging or production, on `GOTENBERG_URL` when set but unparseable, on a username without a password, and on `TENANT_DEV` while `APP_ENV=production`. `GOTENBERG_URL` empty means printing is unavailable and the rest still runs.
 
 ## 8. backups and recovery
 
